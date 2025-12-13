@@ -15,10 +15,13 @@ final class PracticeEngine: ObservableObject {
     private let sequenceGenerator: SequenceGenerator
     private let playbackScheduler: PlaybackScheduler
     private let scoringService: ScoringService
+    private let feedbackService: FeedbackService
     private let settingsRepository: SettingsSnapshotRepository
     private let sessionRepository: SessionRepository
     private let sequenceRepository: SequenceRepository
     private let attemptRepository: AttemptRepository
+    private let feedbackSettings: () -> FeedbackSettings
+    private let replayHotkeyEnabled: () -> Bool
     private var cancellables: Set<AnyCancellable> = []
 
     private var activeSession: (id: Int64, settingsSnapshotId: Int64, settings: PracticeSettingsSnapshot)?
@@ -31,19 +34,25 @@ final class PracticeEngine: ObservableObject {
         sequenceGenerator: SequenceGenerator,
         playbackScheduler: PlaybackScheduler,
         scoringService: ScoringService,
+        feedbackService: FeedbackService,
         settingsRepository: SettingsSnapshotRepository,
         sessionRepository: SessionRepository,
         sequenceRepository: SequenceRepository,
-        attemptRepository: AttemptRepository
+        attemptRepository: AttemptRepository,
+        feedbackSettings: @escaping () -> FeedbackSettings,
+        replayHotkeyEnabled: @escaping () -> Bool
     ) {
         self.midiService = midiService
         self.sequenceGenerator = sequenceGenerator
         self.playbackScheduler = playbackScheduler
         self.scoringService = scoringService
+        self.feedbackService = feedbackService
         self.settingsRepository = settingsRepository
         self.sessionRepository = sessionRepository
         self.sequenceRepository = sequenceRepository
         self.attemptRepository = attemptRepository
+        self.feedbackSettings = feedbackSettings
+        self.replayHotkeyEnabled = replayHotkeyEnabled
         bindMIDI()
     }
 
@@ -75,9 +84,20 @@ final class PracticeEngine: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard case let .noteOn(noteNumber, _) = event else { return }
+                if self?.handleReplayHotkey(noteNumber: noteNumber) == true { return }
                 self?.handle(noteOn: noteNumber)
             }
             .store(in: &cancellables)
+    }
+
+    private func handleReplayHotkey(noteNumber: UInt8) -> Bool {
+        guard replayHotkeyEnabled() else { return false }
+        // A0 on an 88-key keyboard is MIDI note 21; use as replay hotkey.
+        if noteNumber == 21 {
+            replay()
+            return true
+        }
+        return false
     }
 
     private func handle(noteOn noteNumber: UInt8) {
@@ -107,6 +127,7 @@ final class PracticeEngine: ObservableObject {
                 DispatchQueue.main.async { [weak self] in
                     self?.state = .completed(sequence)
                 }
+                feedbackService.playSequenceSuccess(for: sequence.key, settings: feedbackSettings())
             } else {
                 DispatchQueue.main.async { [weak self] in
                     self?.state = .awaitingInput(sequence: sequence, expectedIndex: nextIndex)

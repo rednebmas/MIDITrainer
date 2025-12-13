@@ -12,10 +12,13 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var awaitingNoteIndex: Int?
     @Published var settings: PracticeSettingsSnapshot
+    @Published private(set) var heldNotesCount: Int = 0
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
+    private let settingsStore: SettingsStore
     private var cancellables: Set<AnyCancellable> = []
+    private var heldNotes: Set<UInt8> = []
 
     init(
         midiService: MIDIService,
@@ -23,8 +26,10 @@ final class PracticeModel: ObservableObject {
         sequenceGenerator: SequenceGenerator = SequenceGenerator()
     ) {
         self.midiService = midiService
+        self.settingsStore = settingsStore
         self.settings = settingsStore.settings
         let playbackScheduler = PlaybackScheduler(midiService: midiService)
+        let feedbackService = FeedbackService(midiService: midiService)
 
         let database: Database
         do {
@@ -43,10 +48,13 @@ final class PracticeModel: ObservableObject {
             sequenceGenerator: sequenceGenerator,
             playbackScheduler: playbackScheduler,
             scoringService: ScoringService(),
+            feedbackService: feedbackService,
             settingsRepository: settingsRepo,
             sessionRepository: sessionRepo,
             sequenceRepository: sequenceRepo,
-            attemptRepository: attemptRepo
+            attemptRepository: attemptRepo,
+            feedbackSettings: { settingsStore.feedback },
+            replayHotkeyEnabled: { settingsStore.replayHotkeyEnabled }
         )
         settingsStore.$settings
             .receive(on: DispatchQueue.main)
@@ -60,6 +68,25 @@ final class PracticeModel: ObservableObject {
     func selectOutput(id: MIDIUniqueID) {
         guard let endpoint = availableOutputs.first(where: { $0.id == id }) else { return }
         midiService.selectOutput(endpoint)
+        // Persist the selection
+        settingsStore.lastSelectedOutputID = endpoint.id
+        settingsStore.lastSelectedOutputName = endpoint.name
+        
+        // Also connect the matching input (same device name) for bidirectional MIDI
+        connectMatchingInput(for: endpoint)
+    }
+    
+    /// Connects the input that matches the selected output by name
+    private func connectMatchingInput(for outputEndpoint: MIDIEndpoint) {
+        // Disconnect any previously connected inputs
+        for connectedInput in connectedInputs {
+            midiService.disconnectInput(connectedInput)
+        }
+        
+        // Find and connect the input with the same name as the output
+        if let matchingInput = availableInputs.first(where: { $0.name == outputEndpoint.name }) {
+            midiService.connectInput(matchingInput)
+        }
     }
 
     func toggleInput(id: MIDIUniqueID) {
@@ -91,6 +118,30 @@ final class PracticeModel: ObservableObject {
         engine.replay()
     }
 
+    /// Attempts to auto-select the last used MIDI output if no output is currently selected
+    private func autoSelectLastOutputIfNeeded(outputs: [MIDIEndpoint]) {
+        // Only auto-select if we don't already have a selection
+        guard selectedOutputID == nil, !outputs.isEmpty else { return }
+        
+        // Try to match by ID first (most reliable)
+        if let lastID = settingsStore.lastSelectedOutputID,
+           let matchingEndpoint = outputs.first(where: { $0.id == lastID }) {
+            midiService.selectOutput(matchingEndpoint)
+            connectMatchingInput(for: matchingEndpoint)
+            return
+        }
+        
+        // Fall back to matching by name (Bluetooth devices may get new IDs)
+        if let lastName = settingsStore.lastSelectedOutputName,
+           let matchingEndpoint = outputs.first(where: { $0.name == lastName }) {
+            midiService.selectOutput(matchingEndpoint)
+            connectMatchingInput(for: matchingEndpoint)
+            // Update the stored ID to the new one
+            settingsStore.lastSelectedOutputID = matchingEndpoint.id
+            return
+        }
+    }
+
     private func bind() {
         midiService.availableInputsPublisher
             .receive(on: DispatchQueue.main)
@@ -104,7 +155,11 @@ final class PracticeModel: ObservableObject {
 
         midiService.availableOutputsPublisher
             .receive(on: DispatchQueue.main)
-            .assign(to: \.availableOutputs, on: self)
+            .sink { [weak self] outputs in
+                guard let self else { return }
+                self.availableOutputs = outputs
+                self.autoSelectLastOutputIfNeeded(outputs: outputs)
+            }
             .store(in: &cancellables)
 
         midiService.selectedOutputPublisher
@@ -143,6 +198,24 @@ final class PracticeModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        midiService.noteEvents
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.trackHeld(event: event)
+                self?.record(event: event)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func trackHeld(event: MIDINoteEvent) {
+        switch event {
+        case .noteOn(let noteNumber, _):
+            heldNotes.insert(noteNumber)
+        case .noteOff(let noteNumber):
+            heldNotes.remove(noteNumber)
+        }
+        heldNotesCount = heldNotes.count
     }
 
     private func record(event: MIDINoteEvent) {

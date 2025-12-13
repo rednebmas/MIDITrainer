@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
     @State private var draft: PracticeSettingsSnapshot = PracticeSettingsSnapshot()
+    @State private var feedback: FeedbackSettings = FeedbackSettings()
 
     private let allOctaves = Array(1...7)
 
@@ -50,16 +51,29 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Feedback") {
+                    Picker("Mode", selection: $feedback.mode) {
+                        ForEach(FeedbackMode.allCases, id: \.self) { mode in
+                            Text(label(for: mode)).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Toggle("Replay on lowest key (A0)", isOn: $settingsStore.replayHotkeyEnabled)
+                }
+
             }
             .navigationTitle("Settings")
             .onAppear {
                 draft = settingsStore.settings
+                feedback = settingsStore.feedback
             }
             .onChange(of: settingsStore.settings) { newValue in
                 draft = newValue
             }
             .onDisappear {
                 settingsStore.update(draft)
+                settingsStore.updateFeedback(feedback)
             }
         }
     }
@@ -108,5 +122,13 @@ struct SettingsView: View {
             melodyLength: draft.melodyLength,
             bpm: draft.bpm
         )
+    }
+
+    private func label(for mode: FeedbackMode) -> String {
+        switch mode {
+        case .none: return "Off"
+        case .rootNote: return "Root Note"
+        case .rootTriad: return "Root Triad"
+        }
     }
 }
