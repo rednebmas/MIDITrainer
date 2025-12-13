@@ -4,6 +4,9 @@ import Foundation
 struct QueuedMistake: Equatable, Codable {
     /// Shared initial spacing for new mistakes (kept in one place to avoid drift between runtime and persistence).
     static let initialClearanceDistance = 3
+
+    /// How much to increase the minimum clearance distance when failing a re-ask.
+    static let clearanceIncrement = 3
     
     /// Unique identifier for this queued entry (database row ID).
     let id: Int64

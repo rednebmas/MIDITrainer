@@ -16,6 +16,13 @@ struct FirstTryAccuracy {
     }
 }
 
+struct SequenceHistoryEntry: Identifiable {
+    let id: Int64
+    let midiNotes: [UInt8]
+    let wasCorrectFirstTry: Bool
+    let createdAt: Date
+}
+
 final class StatsRepository {
     private let db: Database
 
@@ -150,6 +157,94 @@ final class StatsRepository {
             guard total > 0 else { return nil }
 
             return FirstTryAccuracy(successCount: successes, totalCount: total)
+        }
+    }
+
+    /// Fetches the last N sequences with their notes and first-try status for the given settings.
+    func sequenceHistory(for settings: PracticeSettingsSnapshot, limit: Int = 20) throws -> [SequenceHistoryEntry] {
+        try db.readWrite { handle in
+            let excluded = try encode(degrees: settings.excludedDegrees)
+            let allowed = try encode(octaves: settings.allowedOctaves)
+
+            // First, get the sequence IDs, their creation dates, and whether they had mistakes
+            let sequencesSql = """
+            WITH filtered AS (
+                SELECT ms.id, ms.createdAt
+                FROM melody_sequence ms
+                JOIN settings_snapshot ss ON ms.settingsSnapshotId = ss.id
+                WHERE ss.keyRoot = ?
+                  AND ss.scaleType = ?
+                  AND ss.excludedDegrees = ?
+                  AND ss.allowedOctaves = ?
+                  AND ss.melodyLength = ?
+                  AND ss.bpm = ?
+                ORDER BY ms.createdAt DESC
+                LIMIT ?
+            ),
+            mistakes AS (
+                SELECT sequenceId, SUM(CASE WHEN isCorrect = 0 THEN 1 ELSE 0 END) as mistakeCount
+                FROM note_attempt
+                GROUP BY sequenceId
+            )
+            SELECT filtered.id, filtered.createdAt, COALESCE(mistakes.mistakeCount, 0) as mistakeCount
+            FROM filtered
+            LEFT JOIN mistakes ON mistakes.sequenceId = filtered.id
+            ORDER BY filtered.createdAt DESC;
+            """
+
+            var sequencesStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(handle, sequencesSql, -1, &sequencesStmt, nil) == SQLITE_OK else {
+                throw DatabaseError.statementFailed(message: "Failed to prepare sequence history query")
+            }
+            defer { sqlite3_finalize(sequencesStmt) }
+
+            sqlite3_bind_int(sequencesStmt, 1, Int32(settings.key.root.rawValue))
+            sqlite3_bind_text(sequencesStmt, 2, settings.scaleType.storageKey, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(sequencesStmt, 3, excluded, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(sequencesStmt, 4, allowed, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int(sequencesStmt, 5, Int32(settings.melodyLength))
+            sqlite3_bind_int(sequencesStmt, 6, Int32(settings.bpm))
+            sqlite3_bind_int(sequencesStmt, 7, Int32(max(limit, 0)))
+
+            var sequenceData: [(id: Int64, createdAt: Double, wasCorrect: Bool)] = []
+            while sqlite3_step(sequencesStmt) == SQLITE_ROW {
+                let id = sqlite3_column_int64(sequencesStmt, 0)
+                let createdAt = sqlite3_column_double(sequencesStmt, 1)
+                let mistakeCount = sqlite3_column_int(sequencesStmt, 2)
+                sequenceData.append((id: id, createdAt: createdAt, wasCorrect: mistakeCount == 0))
+            }
+
+            // Now fetch notes for each sequence
+            var entries: [SequenceHistoryEntry] = []
+            entries.reserveCapacity(sequenceData.count)
+
+            let notesSql = "SELECT midiNoteNumber FROM melody_note WHERE sequenceId = ? ORDER BY noteIndex;"
+            var notesStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(handle, notesSql, -1, &notesStmt, nil) == SQLITE_OK else {
+                throw DatabaseError.statementFailed(message: "Failed to prepare notes query")
+            }
+            defer { sqlite3_finalize(notesStmt) }
+
+            for seq in sequenceData {
+                sqlite3_reset(notesStmt)
+                sqlite3_clear_bindings(notesStmt)
+                sqlite3_bind_int64(notesStmt, 1, seq.id)
+
+                var midiNotes: [UInt8] = []
+                while sqlite3_step(notesStmt) == SQLITE_ROW {
+                    let midiNote = UInt8(sqlite3_column_int(notesStmt, 0))
+                    midiNotes.append(midiNote)
+                }
+
+                entries.append(SequenceHistoryEntry(
+                    id: seq.id,
+                    midiNotes: midiNotes,
+                    wasCorrectFirstTry: seq.wasCorrect,
+                    createdAt: Date(timeIntervalSince1970: seq.createdAt)
+                ))
+            }
+
+            return entries
         }
     }
 

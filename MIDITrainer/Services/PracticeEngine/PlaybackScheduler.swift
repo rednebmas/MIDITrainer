@@ -4,20 +4,29 @@ final class PlaybackScheduler {
     private let midiService: MIDIService
     private let samplePlayer: PianoSamplePlayer?
     private let useSamples: () -> Bool
+    private let volumeProvider: () -> Double
     private let queue = DispatchQueue(label: "com.sambender.miditrainer.playback")
     private var scheduledItems: [DispatchWorkItem] = []
 
-    init(midiService: MIDIService, samplePlayer: PianoSamplePlayer? = nil, useSamples: @escaping () -> Bool = { false }) {
+    init(
+        midiService: MIDIService,
+        samplePlayer: PianoSamplePlayer? = nil,
+        useSamples: @escaping () -> Bool = { false },
+        volumeProvider: @escaping () -> Double = { 0.75 }
+    ) {
         self.midiService = midiService
         self.samplePlayer = samplePlayer
         self.useSamples = useSamples
+        self.volumeProvider = volumeProvider
     }
 
-    func play(sequence: MelodySequence, velocity: UInt8 = 96, completion: (() -> Void)? = nil) {
+    func play(sequence: MelodySequence, completion: (() -> Void)? = nil) {
         queue.async { [weak self] in
             guard let self else { return }
             cancelScheduledLocked()
 
+            // Convert volume (0.0-1.0) to MIDI velocity (0-127)
+            let velocity = UInt8(min(max(self.volumeProvider() * 127.0, 0), 127))
             let secondsPerBeat = 60.0 / Double(sequence.bpm)
             let lastEnd = scheduleNotes(sequence: sequence, secondsPerBeat: secondsPerBeat, velocity: velocity)
             scheduleCompletion(after: lastEnd, completion: completion)

@@ -31,6 +31,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var errorNoteIndex: Int?
     @Published private(set) var isReplaying: Bool = false
     @Published private(set) var firstTryAccuracy: FirstTryAccuracy?
+    @Published private(set) var sequenceHistory: [SequenceHistoryEntry] = []
     @Published private(set) var currentStreak: Int = 0
     @Published private(set) var questionsAnsweredToday: Int = 0
     @Published private(set) var dailyGoal: Int = 30
@@ -58,12 +59,14 @@ final class PracticeModel: ObservableObject {
         self.midiService = midiService
         self.settingsStore = settingsStore
         self.settings = settingsStore.settings
-        // Initialize useOnScreenKeyboard early so the closure can capture it
+        // Initialize values early so the closures can capture them
         let initialUseOnScreenKeyboard = settingsStore.useOnScreenKeyboard
+        let initialVolume = settingsStore.midiOutputVolume
         let playbackScheduler = PlaybackScheduler(
             midiService: midiService,
             samplePlayer: pianoSamplePlayer,
-            useSamples: { [weak settingsStore] in settingsStore?.useOnScreenKeyboard ?? initialUseOnScreenKeyboard }
+            useSamples: { [weak settingsStore] in settingsStore?.useOnScreenKeyboard ?? initialUseOnScreenKeyboard },
+            volumeProvider: { [weak settingsStore] in settingsStore?.midiOutputVolume ?? initialVolume }
         )
         let feedbackService = FeedbackService(midiService: midiService)
 
@@ -219,12 +222,14 @@ final class PracticeModel: ObservableObject {
     }
 
     func injectNoteOn(_ noteNumber: UInt8) {
+        // Convert volume (0.0-1.0) to MIDI velocity (0-127)
+        let velocity = UInt8(min(max(settingsStore.midiOutputVolume * 127.0, 0), 127))
         // Play sample for audio feedback
         if useOnScreenKeyboard {
-            pianoSamplePlayer.play(midiNote: noteNumber, velocity: 100)
+            pianoSamplePlayer.play(midiNote: noteNumber, velocity: velocity)
         }
         // Inject event so the practice engine can evaluate it
-        midiService.injectNoteEvent(.noteOn(noteNumber: noteNumber, velocity: 100))
+        midiService.injectNoteEvent(.noteOn(noteNumber: noteNumber, velocity: velocity))
     }
 
     func injectNoteOff(_ noteNumber: UInt8) {
@@ -383,9 +388,11 @@ final class PracticeModel: ObservableObject {
         let snapshot = settings
         statsQueue.async { [weak self] in
             guard let self else { return }
-            let result = try? self.statsRepository.firstTryAccuracy(for: snapshot, limit: 20)
+            let accuracy = try? self.statsRepository.firstTryAccuracy(for: snapshot, limit: 20)
+            let history = try? self.statsRepository.sequenceHistory(for: snapshot, limit: 20)
             DispatchQueue.main.async {
-                self.firstTryAccuracy = result
+                self.firstTryAccuracy = accuracy
+                self.sequenceHistory = history ?? []
             }
         }
     }

@@ -6,12 +6,16 @@ struct GameStatsBarView: View {
     let questionsToday: Int
     let dailyGoal: Int
     let streak: Int
+    var onAccuracyTap: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             // Accuracy
-            accuracyView
-                .frame(maxWidth: .infinity)
+            Button(action: { onAccuracyTap?() }) {
+                accuracyView
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
 
             Divider()
                 .frame(height: 40)

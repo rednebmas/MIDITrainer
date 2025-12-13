@@ -42,8 +42,8 @@ struct SchedulerDebugView: View {
             // Queued mistakes list
             if !entries.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                        MistakeEntryRow(entry: entry, index: index + 1)
+                    ForEach(entries) { entry in
+                        MistakeEntryRow(entry: entry)
                     }
                 }
             }
@@ -58,15 +58,19 @@ struct SchedulerDebugView: View {
 
 struct MistakeEntryRow: View {
     let entry: SchedulerDebugEntry
-    let index: Int
+
+    // Use last 4 digits of ID as a stable short identifier
+    private var shortId: String {
+        String(format: "%04d", entry.id % 10000)
+    }
 
     var body: some View {
         HStack(spacing: 12) {
-            // Index badge
-            Text("#\(index)")
-                .font(.caption.weight(.semibold))
+            // Stable ID badge
+            Text("#\(shortId)")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
-                .frame(width: 28, height: 20)
+                .frame(width: 40, height: 20)
                 .background(statusColor.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
@@ -76,9 +80,14 @@ struct MistakeEntryRow: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(statusColor)
 
-                // Progress info
+                // Progress info with clearance details
                 Text(progressDescription)
                     .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                // Clearance debug info
+                Text("min: \(entry.minimumClearanceDistance), current: \(entry.currentClearanceDistance), answered: \(entry.questionsSinceQueued)")
+                    .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
 

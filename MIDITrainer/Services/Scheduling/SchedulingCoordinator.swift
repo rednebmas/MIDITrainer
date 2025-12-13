@@ -67,7 +67,11 @@ final class SchedulingCoordinator: ObservableObject {
     /// Records the completion of a sequence.
     func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?) {
         activeScheduler.recordCompletion(seed: seed, settings: settings, hadErrors: hadErrors, mistakeId: mistakeId)
-        activeMistakeId = nil
+        // Only clear activeMistakeId if there were no errors (sequence passed).
+        // If there were errors, a replay will happen and we're still testing this mistake.
+        if !hadErrors {
+            activeMistakeId = nil
+        }
         updatePublishedState()
     }
     

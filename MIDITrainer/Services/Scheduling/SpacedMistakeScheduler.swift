@@ -1,17 +1,18 @@
 import Foundation
 
 /// A scheduler that reinforces incorrect sequences by re-asking them after spaced intervals.
-/// 
+///
 /// Behavior:
 /// - When a sequence is answered incorrectly, it's added to the queue with clearance distance 3.
 /// - After finishing an incorrect sequence, a fresh question is always asked next.
 /// - After the required number of fresh questions, the mistake is re-asked.
-/// - If answered correctly on re-ask, it's removed from the queue.
-/// - If answered incorrectly on re-ask, clearance distance is increased by 3 and it's requeued.
-/// 
+/// - If answered correctly on re-ask and current >= min, it's removed from the queue.
+/// - If answered correctly but current < min, current is pushed up to min for another round.
+/// - If answered incorrectly on re-ask, min increases by 3, current resets to 3 (see it again soon).
+///
 /// Two distances are tracked:
-/// - minimumClearanceDistance: how far apart a correct re-ask must eventually be to clear the item (increases by 3 on each failed re-ask).
-/// - currentClearanceDistance: the immediate spacing required before the next re-ask (set to the minimum on a failure, pushed up to the minimum on a success that is still below the minimum).
+/// - minimumClearanceDistance: the eventual spacing needed to clear the item (increases by 3 on each failed re-ask).
+/// - currentClearanceDistance: the immediate spacing before the next re-ask (resets to 3 on failure, pushed to min on success).
 final class SpacedMistakeScheduler: QuestionScheduler {
     private let repository: MistakeQueueRepository
     private var queue: [QueuedMistake] = []
@@ -104,10 +105,10 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         guard let index = queue.firstIndex(where: { $0.id == mistakeId }) else { return }
         
         if hadErrors {
-            // Failed the re-ask: bump clearance distance by 3, reset counter
+            // Failed the re-ask: bump minimum clearance by 3, reset current to initial so they see it again soon
             var mistake = queue[index]
-            mistake.minimumClearanceDistance += 3
-            mistake.currentClearanceDistance = mistake.minimumClearanceDistance
+            mistake.minimumClearanceDistance += QueuedMistake.clearanceIncrement
+            mistake.currentClearanceDistance = QueuedMistake.initialClearanceDistance
             mistake.questionsSinceQueued = 0
             queue[index] = mistake
             

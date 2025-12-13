@@ -9,6 +9,7 @@ struct PracticeView: View {
     @State private var showingBluetoothPicker = false
     @State private var showingMissingOutput = false
     @State private var showingDebug = false
+    @State private var showingAccuracyHistory = false
 
     init(midiService: MIDIService, settingsStore: SettingsStore) {
         _model = StateObject(wrappedValue: PracticeModel(midiService: midiService, settingsStore: settingsStore))
@@ -46,7 +47,8 @@ struct PracticeView: View {
                 accuracyCount: model.firstTryAccuracy?.totalCount ?? 0,
                 questionsToday: model.questionsAnsweredToday,
                 dailyGoal: model.dailyGoal,
-                streak: model.currentStreak
+                streak: model.currentStreak,
+                onAccuracyTap: { showingAccuracyHistory = true }
             )
             .padding(.top, 16)
 
@@ -151,6 +153,13 @@ struct PracticeView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Please select a MIDI destination before playing.")
+        }
+        .sheet(isPresented: $showingAccuracyHistory) {
+            AccuracyHistorySheet(
+                entries: model.sequenceHistory,
+                keyRoot: model.settings.key.root
+            )
+            .presentationDetents([.medium, .large])
         }
     }
 

@@ -69,12 +69,19 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    
+
                     Text(settingsStore.schedulerMode.description)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
+                Section {
+                    NavigationLink {
+                        AdvancedSettingsView()
+                    } label: {
+                        Text("Advanced")
+                    }
+                }
             }
             .navigationTitle("Settings")
             .onAppear {
