@@ -18,6 +18,8 @@ struct StatsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                
+                FirstTrySection(firstTry: model.firstTryAccuracy)
 
                 StatsChartSection(
                     title: "Mistake rate by degree",
@@ -94,6 +96,27 @@ private enum StatsAlert: Identifiable {
             return "confirmReset"
         case .resetError(let message):
             return "resetError_\(message)"
+        }
+    }
+}
+
+private struct FirstTrySection: View {
+    let firstTry: FirstTryAccuracy?
+
+    var body: some View {
+        Section("First-try accuracy (current settings)") {
+            if let firstTry {
+                let percent = firstTry.rate
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(percent, format: .percent.precision(.fractionLength(0)))
+                        .font(.title2.bold())
+                    Text("Based on the last \(firstTry.totalCount) sequence\(firstTry.totalCount == 1 ? "" : "s") for these settings.")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("No sequences yet for these settings.")
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

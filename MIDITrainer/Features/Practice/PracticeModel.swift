@@ -29,11 +29,14 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var pendingMistakeCount: Int = 0
     @Published private(set) var questionsUntilNextReask: Int?
     @Published private(set) var schedulerDebugEntries: [SchedulerDebugEntry] = []
+    @Published private(set) var firstTryAccuracy: FirstTryAccuracy?
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
     private let settingsStore: SettingsStore
     let schedulingCoordinator: SchedulingCoordinator
+    private let statsRepository: StatsRepository
+    private let statsQueue = DispatchQueue(label: "com.sambender.miditrainer.practice.stats", qos: .userInitiated)
     private var cancellables: Set<AnyCancellable> = []
     private var heldNotes: Set<UInt8> = []
 
@@ -60,6 +63,7 @@ final class PracticeModel: ObservableObject {
         let sequenceRepo = SequenceRepository(db: database)
         let attemptRepo = AttemptRepository(db: database)
         let mistakeQueueRepo = MistakeQueueRepository(db: database)
+        self.statsRepository = StatsRepository(db: database)
         
         // Create the scheduling coordinator with persisted mode
         self.schedulingCoordinator = SchedulingCoordinator(
@@ -88,10 +92,12 @@ final class PracticeModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newSettings in
                 self?.settings = newSettings
+                self?.refreshFirstTryAccuracy()
             }
             .store(in: &cancellables)
         bind()
         bindScheduler()
+        refreshFirstTryAccuracy()
     }
     
     private func bindScheduler() {
@@ -265,6 +271,7 @@ final class PracticeModel: ObservableObject {
                     self.isReplaying = false
                     self.currentSequence = sequence
                     self.awaitingNoteIndex = nil
+                    self.refreshFirstTryAccuracy()
                 }
             }
             .store(in: &cancellables)
@@ -314,6 +321,17 @@ final class PracticeModel: ObservableObject {
             errorNoteIndex = nil
         } else {
             errorNoteIndex = expectedIndex
+        }
+    }
+
+    private func refreshFirstTryAccuracy() {
+        let snapshot = settings
+        statsQueue.async { [weak self] in
+            guard let self else { return }
+            let result = try? self.statsRepository.firstTryAccuracy(for: snapshot, limit: 20)
+            DispatchQueue.main.async {
+                self.firstTryAccuracy = result
+            }
         }
     }
 }

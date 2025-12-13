@@ -6,6 +6,16 @@ enum StatsFilter {
     case key(Key, ScaleType)
 }
 
+struct FirstTryAccuracy {
+    let successCount: Int
+    let totalCount: Int
+
+    var rate: Double {
+        guard totalCount > 0 else { return 0 }
+        return Double(successCount) / Double(totalCount)
+    }
+}
+
 final class StatsRepository {
     private let db: Database
 
@@ -83,6 +93,64 @@ final class StatsRepository {
             filter: filter,
             whereClause: "1=1"
         )
+    }
+
+    /// Computes the first-try accuracy for the last N sequences (default 20) that match the exact current settings.
+    /// A sequence counts as a success if it has zero incorrect attempts recorded.
+    func firstTryAccuracy(for settings: PracticeSettingsSnapshot, limit: Int = 20) throws -> FirstTryAccuracy? {
+        try db.readWrite { handle in
+            let excluded = try encode(degrees: settings.excludedDegrees)
+            let allowed = try encode(octaves: settings.allowedOctaves)
+            let sql = """
+            WITH filtered AS (
+                SELECT ms.id
+                FROM melody_sequence ms
+                JOIN settings_snapshot ss ON ms.settingsSnapshotId = ss.id
+                WHERE ss.keyRoot = ?
+                  AND ss.scaleType = ?
+                  AND ss.excludedDegrees = ?
+                  AND ss.allowedOctaves = ?
+                  AND ss.melodyLength = ?
+                  AND ss.bpm = ?
+                ORDER BY ms.createdAt DESC
+                LIMIT ?
+            ),
+            mistakes AS (
+                SELECT sequenceId, SUM(CASE WHEN isCorrect = 0 THEN 1 ELSE 0 END) as mistakeCount
+                FROM note_attempt
+                GROUP BY sequenceId
+            )
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN COALESCE(mistakes.mistakeCount, 0) = 0 THEN 1 ELSE 0 END) as successCount
+            FROM filtered
+            LEFT JOIN mistakes ON mistakes.sequenceId = filtered.id;
+            """
+
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw DatabaseError.statementFailed(message: "Failed to prepare first-try accuracy query")
+            }
+            defer { sqlite3_finalize(statement) }
+
+            sqlite3_bind_int(statement, 1, Int32(settings.key.root.rawValue))
+            sqlite3_bind_text(statement, 2, settings.scaleType.storageKey, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(statement, 3, excluded, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(statement, 4, allowed, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int(statement, 5, Int32(settings.melodyLength))
+            sqlite3_bind_int(statement, 6, Int32(settings.bpm))
+            sqlite3_bind_int(statement, 7, Int32(max(limit, 0)))
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                throw DatabaseError.statementFailed(message: "Failed to read first-try accuracy row")
+            }
+
+            let total = Int(sqlite3_column_int(statement, 0))
+            let successes = Int(sqlite3_column_int(statement, 1))
+
+            guard total > 0 else { return nil }
+
+            return FirstTryAccuracy(successCount: successes, totalCount: total)
+        }
     }
 
     private func aggregate(
@@ -198,5 +266,16 @@ final class StatsRepository {
                 sqlite3_bind_text(statement, idx, value, -1, SQLITE_TRANSIENT)
             }
         }
+    }
+
+    private func encode(degrees: Set<ScaleDegree>) throws -> String {
+        let raw = Array(degrees).map { $0.rawValue }
+        let data = try JSONEncoder().encode(raw)
+        return String(data: data, encoding: .utf8) ?? "[]"
+    }
+
+    private func encode(octaves: [Int]) throws -> String {
+        let data = try JSONEncoder().encode(octaves)
+        return String(data: data, encoding: .utf8) ?? "[]"
     }
 }

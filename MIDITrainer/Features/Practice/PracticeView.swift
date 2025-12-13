@@ -78,6 +78,7 @@ struct PracticeView: View {
                         }
                     }
 
+                    firstTryRow()
 
                     if let sequence = model.currentSequence {
                         progressDots(for: sequence)
@@ -207,6 +208,36 @@ struct PracticeView: View {
                 }
             }
         )
+    }
+
+    @ViewBuilder
+    private func firstTryRow() -> some View {
+        if let accuracy = model.firstTryAccuracy {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("First-try accuracy")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text("Last \(accuracy.totalCount) sequence\(accuracy.totalCount == 1 ? "" : "s") (current settings)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(accuracy.rate, format: .percent.precision(.fractionLength(0)))
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(accuracy.rate >= 0.8 ? .green : .primary)
+            }
+        } else {
+            HStack {
+                Text("First-try accuracy")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("No data yet")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func progressDots(for sequence: MelodySequence) -> some View {

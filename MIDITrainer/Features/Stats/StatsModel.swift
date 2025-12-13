@@ -11,6 +11,7 @@ final class StatsModel: ObservableObject {
     @Published var intervalBuckets: [StatBucket] = []
     @Published var noteIndexBuckets: [StatBucket] = []
     @Published var resetError: String?
+    @Published var firstTryAccuracy: FirstTryAccuracy?
     @Published var scope: Scope = .allKeys {
         didSet {
             refresh()
@@ -44,11 +45,13 @@ final class StatsModel: ObservableObject {
             let degrees = (try? self.statsRepository.mistakeRateByDegree(filter: filter)) ?? []
             let intervals = (try? self.statsRepository.mistakeRateByInterval(filter: filter)) ?? []
             let noteIndexes = (try? self.statsRepository.mistakeRateByNoteIndex(filter: filter)) ?? []
+            let firstTry = try? self.statsRepository.firstTryAccuracy(for: self.currentSettings, limit: 20)
 
             DispatchQueue.main.async {
                 self.degreeBuckets = degrees
                 self.intervalBuckets = intervals
                 self.noteIndexBuckets = noteIndexes
+                self.firstTryAccuracy = firstTry
             }
         }
     }
