@@ -31,6 +31,21 @@ final class SettingsStore: ObservableObject {
             defaults.set(lastSelectedOutputName, forKey: lastOutputNameKey)
         }
     }
+    /// Daily practice goal (number of questions)
+    @Published var dailyGoal: Int {
+        didSet { defaults.set(dailyGoal, forKey: dailyGoalKey) }
+    }
+    /// Number of questions answered today
+    @Published var questionsAnsweredToday: Int {
+        didSet {
+            defaults.set(questionsAnsweredToday, forKey: questionsAnsweredTodayKey)
+            defaults.set(todayDateString, forKey: lastPracticeDateKey)
+        }
+    }
+    /// Current streak of perfect sequences
+    @Published var currentStreak: Int {
+        didSet { defaults.set(currentStreak, forKey: currentStreakKey) }
+    }
 
     private let defaults: UserDefaults
     private let key = "com.sambender.miditrainer.settings"
@@ -39,6 +54,16 @@ final class SettingsStore: ObservableObject {
     private let schedulerModeKey = "com.sambender.miditrainer.schedulerMode"
     private let lastOutputIDKey = "com.sambender.miditrainer.lastOutputID"
     private let lastOutputNameKey = "com.sambender.miditrainer.lastOutputName"
+    private let dailyGoalKey = "com.sambender.miditrainer.dailyGoal"
+    private let questionsAnsweredTodayKey = "com.sambender.miditrainer.questionsAnsweredToday"
+    private let lastPracticeDateKey = "com.sambender.miditrainer.lastPracticeDate"
+    private let currentStreakKey = "com.sambender.miditrainer.currentStreak"
+
+    private var todayDateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -57,6 +82,32 @@ final class SettingsStore: ObservableObject {
             self.lastSelectedOutputID = nil
         }
         self.lastSelectedOutputName = defaults.string(forKey: lastOutputNameKey)
+        self.dailyGoal = defaults.object(forKey: dailyGoalKey) as? Int ?? 30
+        self.currentStreak = defaults.object(forKey: currentStreakKey) as? Int ?? 0
+
+        // Check if it's a new day and reset daily count if needed
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+        let lastDate = defaults.string(forKey: lastPracticeDateKey)
+
+        if lastDate == today {
+            self.questionsAnsweredToday = defaults.object(forKey: questionsAnsweredTodayKey) as? Int ?? 0
+        } else {
+            self.questionsAnsweredToday = 0
+        }
+    }
+
+    func incrementQuestionsAnswered() {
+        questionsAnsweredToday += 1
+    }
+
+    func incrementStreak() {
+        currentStreak += 1
+    }
+
+    func resetStreak() {
+        currentStreak = 0
     }
 
     func update(_ newSettings: PracticeSettingsSnapshot) {

@@ -32,8 +32,8 @@ final class PracticeEngine: ObservableObject {
     
     /// Tracks the current note index during playback+input phase
     private var currentInputIndex: Int = 0
-    /// Tracks whether any mistake was made in the current sequence
-    private var madeErrorInCurrentSequence: Bool = false
+    /// Tracks whether any mistake was made in the current attempt (resets on replay)
+    @Published private(set) var madeErrorInCurrentAttempt: Bool = false
     /// Whether playback has finished (user can still input during playback)
     private var playbackFinished: Bool = false
     /// Tracks currently held MIDI notes for detecting when all keys are released
@@ -46,6 +46,8 @@ final class PracticeEngine: ObservableObject {
     private var currentMistakeId: Int64?
     /// Whether we've already recorded a completion for the current sequence (to avoid duplicates on replays)
     private var hasRecordedCompletion: Bool = false
+    /// Whether the user ever made an error on the current sequence (persists across replays)
+    @Published private(set) var hadErrorsInSequence: Bool = false
 
     init(
         midiService: MIDIService,
@@ -103,10 +105,11 @@ final class PracticeEngine: ObservableObject {
             currentSeed = seed
             currentMistakeId = mistakeId
             hasRecordedCompletion = false
+            hadErrorsInSequence = false
             lastCorrectExpected = nil
             lastCorrectGuessed = nil
             currentInputIndex = 0
-            madeErrorInCurrentSequence = false
+            madeErrorInCurrentAttempt = false
             playbackFinished = false
 
             DispatchQueue.main.async { [weak self] in
@@ -217,7 +220,8 @@ final class PracticeEngine: ObservableObject {
             }
         } else {
             // Record that an error was made
-            madeErrorInCurrentSequence = true
+            madeErrorInCurrentAttempt = true
+            hadErrorsInSequence = true
         }
     }
     
@@ -230,7 +234,7 @@ final class PracticeEngine: ObservableObject {
             schedulingCoordinator?.recordCompletion(
                 seed: seed,
                 settings: settings,
-                hadErrors: madeErrorInCurrentSequence,
+                hadErrors: madeErrorInCurrentAttempt,
                 mistakeId: currentMistakeId
             )
         }
@@ -241,7 +245,7 @@ final class PracticeEngine: ObservableObject {
             guard let self else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
                 guard let self else { return }
-                if self.madeErrorInCurrentSequence {
+                if self.madeErrorInCurrentAttempt {
                     self.replayCurrentSequence(sequence: sequence, settings: settings)
                 } else {
                     self.feedbackService.playSequenceSuccess(for: sequence.key, settings: self.feedbackSettings())
@@ -264,7 +268,7 @@ final class PracticeEngine: ObservableObject {
         lastCorrectExpected = nil
         lastCorrectGuessed = nil
         currentInputIndex = 0
-        madeErrorInCurrentSequence = false
+        madeErrorInCurrentAttempt = false
         playbackFinished = false
 
         state = .playing(sequence)

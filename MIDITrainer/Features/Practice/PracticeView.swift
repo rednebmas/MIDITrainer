@@ -1,6 +1,3 @@
-// This file avoids using RangeSet or array literals for tags or ForEach iterations,
-// as these usages are incorrect and may produce build errors.
-
 import Combine
 import CoreAudioKit
 import CoreMIDI
@@ -8,13 +5,10 @@ import SwiftUI
 
 struct PracticeView: View {
     @StateObject private var model: PracticeModel
+    @State private var showingMIDISettings = false
     @State private var showingBluetoothPicker = false
     @State private var showingMissingOutput = false
-
-    private enum OutputChoice: Hashable {
-        case endpoint(MIDIUniqueID)
-        case bluetooth
-    }
+    @State private var showingDebug = false
 
     init(midiService: MIDIService, settingsStore: SettingsStore) {
         _model = StateObject(wrappedValue: PracticeModel(midiService: midiService, settingsStore: settingsStore))
@@ -26,272 +20,253 @@ struct PracticeView: View {
         return noteName.displayName
     }
 
-    private var dedupedOutputs: [MIDIEndpoint] {
-        var seen: Set<String> = []
-        return model.availableOutputs.filter { endpoint in
-            if seen.contains(endpoint.name) {
-                return false
-            } else {
-                seen.insert(endpoint.name)
-                return true
-            }
+    private var isMidiConnected: Bool {
+        guard let outputID = model.selectedOutputID else { return false }
+        return model.availableOutputs.first(where: { $0.id == outputID })?.isOffline == false
+    }
+
+    private func feedbackType(for feedback: SequenceFeedback) -> FeedbackType {
+        switch feedback {
+        case .perfect: return .perfect
+        case .correct: return .correct
+        case .tryAgain: return .tryAgain
         }
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Playback") {
-                    HStack {
-                        Button(model.currentSequence == nil ? "Start" : "Next Question") {
-                            guard model.selectedOutputID != nil || model.availableOutputs.isEmpty == false else {
-                                showingMissingOutput = true
-                                return
-                            }
-                            model.playQuestion()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.isPlaying)
+        VStack(spacing: 0) {
+            // Top Stats Bar
+            GameStatsBarView(
+                accuracy: model.firstTryAccuracy?.rate,
+                accuracyCount: model.firstTryAccuracy?.totalCount ?? 0,
+                questionsToday: model.questionsAnsweredToday,
+                dailyGoal: model.dailyGoal,
+                streak: model.currentStreak
+            )
+            .padding(.top, 16)
 
-                        Button("Replay") {
-                            model.replay()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.currentSequence == nil || model.isPlaying)
+            Spacer()
 
-                        Spacer()
-                        if model.isPlaying {
-                            Text(model.isReplaying ? "Replaying…" : "Playing…")
-                                .foregroundStyle(.secondary)
-                                .font(.footnote)
-                        }
-                    }
+            // Center Stage - Note Orbs
+            ZStack {
+                NoteOrbsContainerView(
+                    sequence: model.currentSequence,
+                    awaitingIndex: model.awaitingNoteIndex,
+                    errorIndex: model.errorNoteIndex,
+                    isPlaying: model.isPlaying,
+                    firstNoteName: firstNoteName
+                )
 
-                    if let name = firstNoteName {
-                        HStack(spacing: 4) {
-                            Text("First note:")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            Text(name)
-                                .font(.footnote)
-                                .foregroundStyle(.primary)
-                        }
-                    }
-
-                    firstTryRow()
-
-                    if let sequence = model.currentSequence {
-                        progressDots(for: sequence)
-                    }
-                    
-                    if model.pendingMistakeCount > 0 {
-                        HStack {
-                            if let remaining = model.questionsUntilNextReask, remaining > 0 {
-                                Text("Re-ask in \(remaining)")
-                                    .font(.footnote)
-                                    .foregroundStyle(.orange)
-                            } else {
-                                Text("Re-ask pending")
-                                    .font(.footnote)
-                                    .foregroundStyle(.orange)
-                            }
-                            Spacer()
-                            Text("\(model.pendingMistakeCount) queued")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            Button("Clear") {
-                                model.clearMistakeQueue()
-                            }
-                            .font(.footnote)
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                    
-                    if !model.schedulerDebugEntries.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Scheduler debug")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            
-                            ForEach(model.schedulerDebugEntries) { entry in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack {
-                                        Text("Seed \(entry.seed)")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Spacer()
-                                        Text(schedulerStatusText(for: entry))
-                                            .font(.caption2)
-                                            .foregroundStyle(schedulerStatusColor(for: entry))
-                                    }
-                                    
-                                    Text("Spacing \(entry.questionsSinceQueued)/\(entry.currentClearanceDistance) • Min \(entry.minimumClearanceDistance) • Remaining \(entry.remainingUntilDue)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .padding(.top, 4)
-                    }
-                }
-
-                Section("MIDI") {
-                    if dedupedOutputs.isEmpty {
-                        Text("No MIDI outputs available")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Picker("Destination", selection: outputSelectionBinding) {
-                        if dedupedOutputs.isEmpty {
-                            Text("None").tag(OutputChoice.bluetooth)
-                        }
-                        ForEach(dedupedOutputs, id: \.id) { endpoint in
-                            if endpoint.isOffline {
-                                Text("\(endpoint.name) (offline)").tag(OutputChoice.endpoint(endpoint.id))
-                            } else {
-                                Text(endpoint.name).tag(OutputChoice.endpoint(endpoint.id))
-                            }
-                        }
-                        Text("Bluetooth MIDI…").tag(OutputChoice.bluetooth)
-                    }
-                    .pickerStyle(.menu)
-                    
-                    HStack {
-                        Text("Keys down")
-                        Circle()
-                            .fill(model.heldNotesCount > 0 ? Color.green : Color.gray.opacity(0.4))
-                            .frame(width: 12, height: 12)
-                        Text("\(model.heldNotesCount)")
-                            .foregroundStyle(.secondary)
-                            .font(.footnote)
-                    }
-                    
+                // Floating Feedback Overlay
+                if let feedback = model.latestFeedback {
+                    FloatingFeedbackView(
+                        type: feedbackType(for: feedback),
+                        isVisible: true
+                    )
+                    .offset(y: -80)
                 }
             }
-            .navigationTitle("Practice")
-            .sheet(isPresented: $showingBluetoothPicker, onDismiss: {
-                // Refresh endpoints after Bluetooth picker is dismissed
-                // to pick up any newly connected devices
-                model.refreshEndpoints()
-            }) {
-                BluetoothMIDIPicker()
+
+            Spacer()
+
+            // Bottom Action Bar
+            ActionBarView(
+                hasSequence: model.currentSequence != nil,
+                isPlaying: model.isPlaying,
+                midiDeviceName: model.selectedOutputName,
+                isMidiConnected: isMidiConnected,
+                onAction: handleAction,
+                onMidiSettingsTap: { showingMIDISettings = true }
+            )
+            .padding(.bottom, 8)
+
+            // Debug toggle
+            Button {
+                withAnimation { showingDebug.toggle() }
+            } label: {
+                HStack {
+                    Image(systemName: showingDebug ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                    Text("Scheduler Debug")
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
             }
-            .alert("MIDI output not available", isPresented: $showingMissingOutput) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Please select a MIDI destination before playing.")
+            .buttonStyle(.plain)
+            .padding(.bottom, 8)
+
+            // Debug Section
+            if showingDebug {
+                SchedulerDebugView(
+                    entries: model.schedulerDebugEntries,
+                    pendingCount: model.pendingMistakeCount,
+                    questionsUntilNextReask: model.questionsUntilNextReask,
+                    onClearQueue: { model.clearMistakeQueue() }
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
             }
+        }
+        .sheet(isPresented: $showingMIDISettings) {
+            MIDISettingsSheet(
+                availableOutputs: model.availableOutputs,
+                selectedOutputID: model.selectedOutputID,
+                onSelectOutput: { id in
+                    model.selectOutput(id: id)
+                },
+                onBluetoothTap: {
+                    showingMIDISettings = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showingBluetoothPicker = true
+                    }
+                }
+            )
+            .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingBluetoothPicker, onDismiss: {
+            model.refreshEndpoints()
+        }) {
+            BluetoothMIDIPicker()
+        }
+        .alert("MIDI output not available", isPresented: $showingMissingOutput) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please select a MIDI destination before playing.")
         }
     }
 
-    private var selectedOutputBinding: Binding<MIDIUniqueID?> {
-        Binding<MIDIUniqueID?>(
-            get: { model.selectedOutputID },
-            set: { id in
-                if let id {
-                    model.selectOutput(id: id)
-                }
-            }
-        )
-    }
+    private func handleAction() {
+        guard model.selectedOutputID != nil || !model.availableOutputs.isEmpty else {
+            showingMissingOutput = true
+            return
+        }
 
-    private var outputSelectionBinding: Binding<OutputChoice> {
-        Binding<OutputChoice>(
-            get: {
-                if let id = model.selectedOutputID {
-                    return .endpoint(id)
-                }
-                return .bluetooth
-            },
-            set: { choice in
-                switch choice {
-                case .endpoint(let id):
-                    model.selectOutput(id: id)
-                case .bluetooth:
-                    showingBluetoothPicker = true
-                }
-            }
-        )
-    }
-
-    @ViewBuilder
-    private func firstTryRow() -> some View {
-        if let accuracy = model.firstTryAccuracy {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("First-try accuracy")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Text("Last \(accuracy.totalCount) sequence\(accuracy.totalCount == 1 ? "" : "s") (current settings)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(accuracy.rate, format: .percent.precision(.fractionLength(0)))
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(accuracy.rate >= 0.8 ? .green : .primary)
-            }
+        if model.currentSequence == nil {
+            // Start new session
+            model.playQuestion()
         } else {
-            HStack {
-                Text("First-try accuracy")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("No data yet")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            // Replay current sequence
+            model.replay()
         }
     }
+}
 
-    private func progressDots(for sequence: MelodySequence) -> some View {
-        HStack(spacing: 8) {
-            ForEach(Array(sequence.notes.enumerated()), id: \.offset) { index, _ in
-                Circle()
-                    .fill(colorForNoteIndex(index))
-                    .frame(width: 14, height: 14)
+// MARK: - Scheduler Debug View
+
+struct SchedulerDebugView: View {
+    let entries: [SchedulerDebugEntry]
+    let pendingCount: Int
+    let questionsUntilNextReask: Int?
+    let onClearQueue: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header with summary
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Re-ask Queue")
+                        .font(.subheadline.weight(.medium))
+                    if pendingCount > 0 {
+                        if let remaining = questionsUntilNextReask, remaining > 0 {
+                            Text("Next re-ask in \(remaining) question\(remaining == 1 ? "" : "s")")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text("Re-ask ready now")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        }
+                    } else {
+                        Text("No mistakes queued")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if pendingCount > 0 {
+                    Button("Clear All") {
+                        onClearQueue()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            // Queued mistakes list
+            if !entries.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                        MistakeEntryRow(entry: entry, index: index + 1)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.primary.opacity(0.05))
+        )
+    }
+}
+
+struct MistakeEntryRow: View {
+    let entry: SchedulerDebugEntry
+    let index: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Index badge
+            Text("#\(index)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 20)
+                .background(statusColor.opacity(0.9))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            VStack(alignment: .leading, spacing: 2) {
+                // Status
+                Text(statusDescription)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(statusColor)
+
+                // Progress info
+                Text(progressDescription)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            // Visual progress indicator
+            if !entry.isDue && !entry.isActive {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .frame(width: 50)
             }
         }
         .padding(.vertical, 4)
     }
 
-    private func colorForNoteIndex(_ index: Int) -> Color {
-        if let errorIndex = model.errorNoteIndex, errorIndex == index {
-            return .red
-        }
-        // While playback is running, show a neutral state.
-        if model.isPlaying {
-            return .gray.opacity(0.4)
-        }
-        guard let awaiting = model.awaitingNoteIndex else {
-            return .green
-        }
-        if index < awaiting {
-            return .green
-        } else if index == awaiting {
-            return .yellow
-        } else {
-            return .gray.opacity(0.4)
-        }
+    private var statusDescription: String {
+        if entry.isActive { return "Now playing" }
+        if entry.isDue { return "Ready to play" }
+        return "Waiting (\(entry.remainingUntilDue) more)"
     }
-    
-    private func schedulerStatusText(for entry: SchedulerDebugEntry) -> String {
-        if entry.isActive { return "Playing" }
-        if entry.isDue { return "Due" }
-        return "Waiting"
+
+    private var progressDescription: String {
+        if entry.isActive { return "Testing your recall" }
+        if entry.isDue { return "Will be asked next" }
+        return "Answered \(entry.questionsSinceQueued) of \(entry.currentClearanceDistance) needed"
     }
-    
-    private func schedulerStatusColor(for entry: SchedulerDebugEntry) -> Color {
+
+    private var progress: Double {
+        guard entry.currentClearanceDistance > 0 else { return 0 }
+        return Double(entry.questionsSinceQueued) / Double(entry.currentClearanceDistance)
+    }
+
+    private var statusColor: Color {
         if entry.isActive { return .green }
         if entry.isDue { return .orange }
-        return .secondary
+        return .blue
     }
-}
-
-struct BluetoothMIDIPicker: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> CABTMIDICentralViewController {
-        CABTMIDICentralViewController()
-    }
-
-    func updateUIViewController(_ uiViewController: CABTMIDICentralViewController, context: Context) {}
 }

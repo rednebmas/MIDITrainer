@@ -13,23 +13,33 @@ struct SchedulerDebugEntry: Identifiable, Equatable {
     let isActive: Bool
 }
 
+enum SequenceFeedback {
+    case perfect    // First attempt, no errors ever
+    case correct    // Got it right, but had errors on previous attempts
+    case tryAgain   // Made errors, will replay
+}
+
 final class PracticeModel: ObservableObject {
     @Published var availableInputs: [MIDIEndpoint] = []
     @Published var connectedInputs: [MIDIEndpoint] = []
     @Published var availableOutputs: [MIDIEndpoint] = []
     @Published private(set) var selectedOutputID: MIDIUniqueID?
-    @Published private(set) var recentEvents: [String] = []
     @Published private(set) var currentSequence: MelodySequence?
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var awaitingNoteIndex: Int?
     @Published var settings: PracticeSettingsSnapshot
-    @Published private(set) var heldNotesCount: Int = 0
     @Published private(set) var errorNoteIndex: Int?
     @Published private(set) var isReplaying: Bool = false
+    @Published private(set) var firstTryAccuracy: FirstTryAccuracy?
+    @Published private(set) var currentStreak: Int = 0
+    @Published private(set) var questionsAnsweredToday: Int = 0
+    @Published private(set) var dailyGoal: Int = 30
+    @Published private(set) var latestFeedback: SequenceFeedback?
+    @Published private(set) var selectedOutputName: String?
     @Published private(set) var pendingMistakeCount: Int = 0
     @Published private(set) var questionsUntilNextReask: Int?
     @Published private(set) var schedulerDebugEntries: [SchedulerDebugEntry] = []
-    @Published private(set) var firstTryAccuracy: FirstTryAccuracy?
+
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -38,7 +48,6 @@ final class PracticeModel: ObservableObject {
     private let statsRepository: StatsRepository
     private let statsQueue = DispatchQueue(label: "com.sambender.miditrainer.practice.stats", qos: .userInitiated)
     private var cancellables: Set<AnyCancellable> = []
-    private var heldNotes: Set<UInt8> = []
 
     init(
         midiService: MIDIService,
@@ -96,21 +105,39 @@ final class PracticeModel: ObservableObject {
             }
             .store(in: &cancellables)
         bind()
+        bindStats()
         bindScheduler()
         refreshFirstTryAccuracy()
     }
-    
+
+    private func bindStats() {
+        settingsStore.$currentStreak
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.currentStreak, on: self)
+            .store(in: &cancellables)
+
+        settingsStore.$questionsAnsweredToday
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.questionsAnsweredToday, on: self)
+            .store(in: &cancellables)
+
+        settingsStore.$dailyGoal
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.dailyGoal, on: self)
+            .store(in: &cancellables)
+    }
+
     private func bindScheduler() {
         schedulingCoordinator.$pendingCount
             .receive(on: DispatchQueue.main)
             .assign(to: \.pendingMistakeCount, on: self)
             .store(in: &cancellables)
-        
+
         schedulingCoordinator.$questionsUntilNextReask
             .receive(on: DispatchQueue.main)
             .assign(to: \.questionsUntilNextReask, on: self)
             .store(in: &cancellables)
-        
+
         Publishers.CombineLatest(
             schedulingCoordinator.$queueSnapshot,
             schedulingCoordinator.$activeMistakeId
@@ -134,7 +161,7 @@ final class PracticeModel: ObservableObject {
         }
         .store(in: &cancellables)
     }
-    
+
     func clearMistakeQueue() {
         schedulingCoordinator.clearQueue()
     }
@@ -163,25 +190,8 @@ final class PracticeModel: ObservableObject {
         }
     }
 
-    func toggleInput(id: MIDIUniqueID) {
-        guard let endpoint = availableInputs.first(where: { $0.id == id }) else { return }
-        if connectedInputs.contains(where: { $0.id == id }) {
-            midiService.disconnectInput(endpoint)
-        } else {
-            midiService.connectInput(endpoint)
-        }
-    }
-
     func refreshEndpoints() {
         midiService.refreshEndpoints()
-    }
-
-    func sendTestNote() {
-        let note: UInt8 = 60 // middle C
-        midiService.send(noteOn: note, velocity: 96)
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.4) { [weak midiService] in
-            midiService?.send(noteOff: note)
-        }
     }
 
     func playQuestion(seed: UInt64? = nil) {
@@ -241,9 +251,11 @@ final class PracticeModel: ObservableObject {
             .store(in: &cancellables)
 
         midiService.selectedOutputPublisher
-            .map { $0?.id }
             .receive(on: DispatchQueue.main)
-            .assign(to: \.selectedOutputID, on: self)
+            .sink { [weak self] endpoint in
+                self?.selectedOutputID = endpoint?.id
+                self?.selectedOutputName = endpoint?.name
+            }
             .store(in: &cancellables)
 
         engine.$state
@@ -271,6 +283,7 @@ final class PracticeModel: ObservableObject {
                     self.isReplaying = false
                     self.currentSequence = sequence
                     self.awaitingNoteIndex = nil
+                    self.handleSequenceCompleted()
                     self.refreshFirstTryAccuracy()
                 }
             }
@@ -279,33 +292,9 @@ final class PracticeModel: ObservableObject {
         midiService.noteEvents
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                self?.trackHeld(event: event)
-                self?.record(event: event)
                 self?.evaluateMistake(event: event)
             }
             .store(in: &cancellables)
-    }
-
-    private func trackHeld(event: MIDINoteEvent) {
-        switch event {
-        case .noteOn(let noteNumber, _):
-            heldNotes.insert(noteNumber)
-        case .noteOff(let noteNumber):
-            heldNotes.remove(noteNumber)
-        }
-        heldNotesCount = heldNotes.count
-    }
-
-    private func record(event: MIDINoteEvent) {
-        let description: String
-        switch event {
-        case .noteOn(let noteNumber, let velocity):
-            description = "Note On \(noteNumber) v\(velocity)"
-        case .noteOff(let noteNumber):
-            description = "Note Off \(noteNumber)"
-        }
-
-        recentEvents = Array(([description] + recentEvents).prefix(5))
     }
 
     private func evaluateMistake(event: MIDINoteEvent) {
@@ -321,6 +310,36 @@ final class PracticeModel: ObservableObject {
             errorNoteIndex = nil
         } else {
             errorNoteIndex = expectedIndex
+        }
+    }
+
+    private func handleSequenceCompleted() {
+        // Check engine state for whether this attempt had errors
+        // The engine tracks madeErrorInCurrentSequence (resets each attempt)
+        // and hadErrorsInSequence (persists across replays for same sequence)
+        let currentAttemptHadErrors = engine.hadErrorsInSequence && errorNoteIndex != nil
+
+        // If the current attempt completed without errors
+        if errorNoteIndex == nil {
+            if engine.hadErrorsInSequence {
+                // Got it right, but had errors on previous attempts
+                settingsStore.incrementQuestionsAnswered()
+                latestFeedback = .correct
+            } else {
+                // Perfect - first attempt, no errors ever
+                settingsStore.incrementStreak()
+                settingsStore.incrementQuestionsAnswered()
+                latestFeedback = .perfect
+            }
+        } else {
+            // Current attempt had errors - will replay
+            settingsStore.resetStreak()
+            latestFeedback = .tryAgain
+        }
+
+        // Clear feedback after a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.latestFeedback = nil
         }
     }
 
