@@ -10,6 +10,7 @@ final class StatsModel: ObservableObject {
     @Published var degreeBuckets: [StatBucket] = []
     @Published var intervalBuckets: [StatBucket] = []
     @Published var noteIndexBuckets: [StatBucket] = []
+    @Published var resetError: String?
     @Published var scope: Scope = .allKeys {
         didSet {
             refresh()
@@ -17,6 +18,7 @@ final class StatsModel: ObservableObject {
     }
 
     private let statsRepository: StatsRepository
+    private let historyRepository: HistoryRepository
     private var currentSettings: PracticeSettingsSnapshot
     private let queue = DispatchQueue(label: "com.sambender.miditrainer.stats", qos: .userInitiated)
 
@@ -31,6 +33,7 @@ final class StatsModel: ObservableObject {
         }
 
         self.statsRepository = StatsRepository(db: database)
+        self.historyRepository = HistoryRepository(db: database)
         refresh()
     }
 
@@ -46,6 +49,23 @@ final class StatsModel: ObservableObject {
                 self.degreeBuckets = degrees
                 self.intervalBuckets = intervals
                 self.noteIndexBuckets = noteIndexes
+            }
+        }
+    }
+
+    func resetHistory() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            do {
+                try self.historyRepository.resetHistory()
+                DispatchQueue.main.async {
+                    self.resetError = nil
+                    self.refresh()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.resetError = "Reset failed: \(error.localizedDescription)"
+                }
             }
         }
     }
