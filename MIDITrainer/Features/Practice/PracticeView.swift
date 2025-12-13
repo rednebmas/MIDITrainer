@@ -11,6 +11,12 @@ struct PracticeView: View {
         _model = StateObject(wrappedValue: PracticeModel(midiService: midiService))
     }
 
+    private var firstNoteName: String? {
+        guard let midiNumber = model.currentSequence?.notes.first?.midiNoteNumber,
+              let noteName = NoteName(rawValue: Int(midiNumber % 12)) else { return nil }
+        return noteName.displayName
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -75,6 +81,12 @@ struct PracticeView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isPlaying)
+
+                    if let name = firstNoteName {
+                        Text("First note: \(name)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
 
                     Button("Replay") {
                         model.replay()
