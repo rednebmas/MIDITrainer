@@ -62,6 +62,19 @@ struct SettingsView: View {
                     Toggle("Replay on lowest key (A0)", isOn: $settingsStore.replayHotkeyEnabled)
                 }
 
+                Section("Scheduling") {
+                    Picker("Question Mode", selection: $settingsStore.schedulerMode) {
+                        ForEach(SchedulerMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    Text(settingsStore.schedulerMode.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
             }
             .navigationTitle("Settings")
             .onAppear {

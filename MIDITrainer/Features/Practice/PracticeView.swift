@@ -82,6 +82,29 @@ struct PracticeView: View {
                     if let sequence = model.currentSequence {
                         progressDots(for: sequence)
                     }
+                    
+                    if model.pendingMistakeCount > 0 {
+                        HStack {
+                            if let remaining = model.questionsUntilNextReask, remaining > 0 {
+                                Text("Re-ask in \(remaining)")
+                                    .font(.footnote)
+                                    .foregroundStyle(.orange)
+                            } else {
+                                Text("Re-ask pending")
+                                    .font(.footnote)
+                                    .foregroundStyle(.orange)
+                            }
+                            Spacer()
+                            Text("\(model.pendingMistakeCount) queued")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Button("Clear") {
+                                model.clearMistakeQueue()
+                            }
+                            .font(.footnote)
+                            .buttonStyle(.bordered)
+                        }
+                    }
                 }
 
                 Section("MIDI") {

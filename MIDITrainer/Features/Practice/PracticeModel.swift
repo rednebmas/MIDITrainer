@@ -15,10 +15,13 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var heldNotesCount: Int = 0
     @Published private(set) var errorNoteIndex: Int?
     @Published private(set) var isReplaying: Bool = false
+    @Published private(set) var pendingMistakeCount: Int = 0
+    @Published private(set) var questionsUntilNextReask: Int?
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
     private let settingsStore: SettingsStore
+    let schedulingCoordinator: SchedulingCoordinator
     private var cancellables: Set<AnyCancellable> = []
     private var heldNotes: Set<UInt8> = []
 
@@ -44,6 +47,16 @@ final class PracticeModel: ObservableObject {
         let sessionRepo = SessionRepository(db: database)
         let sequenceRepo = SequenceRepository(db: database)
         let attemptRepo = AttemptRepository(db: database)
+        let mistakeQueueRepo = MistakeQueueRepository(db: database)
+        
+        // Create the scheduling coordinator with persisted mode
+        self.schedulingCoordinator = SchedulingCoordinator(
+            initialMode: settingsStore.schedulerMode,
+            repository: mistakeQueueRepo,
+            onModeChange: { newMode in
+                settingsStore.schedulerMode = newMode
+            }
+        )
 
         self.engine = PracticeEngine(
             midiService: midiService,
@@ -56,7 +69,8 @@ final class PracticeModel: ObservableObject {
             sequenceRepository: sequenceRepo,
             attemptRepository: attemptRepo,
             feedbackSettings: { settingsStore.feedback },
-            replayHotkeyEnabled: { settingsStore.replayHotkeyEnabled }
+            replayHotkeyEnabled: { settingsStore.replayHotkeyEnabled },
+            schedulingCoordinator: schedulingCoordinator
         )
         settingsStore.$settings
             .receive(on: DispatchQueue.main)
@@ -65,6 +79,23 @@ final class PracticeModel: ObservableObject {
             }
             .store(in: &cancellables)
         bind()
+        bindScheduler()
+    }
+    
+    private func bindScheduler() {
+        schedulingCoordinator.$pendingCount
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.pendingMistakeCount, on: self)
+            .store(in: &cancellables)
+        
+        schedulingCoordinator.$questionsUntilNextReask
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.questionsUntilNextReask, on: self)
+            .store(in: &cancellables)
+    }
+    
+    func clearMistakeQueue() {
+        schedulingCoordinator.clearQueue()
     }
 
     func selectOutput(id: MIDIUniqueID) {

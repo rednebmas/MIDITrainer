@@ -125,6 +125,19 @@ extension Database {
             "CREATE INDEX IF NOT EXISTS idx_note_attempt_sequenceId ON note_attempt(sequenceId);",
             "CREATE INDEX IF NOT EXISTS idx_note_attempt_sessionId ON note_attempt(sessionId);",
             "CREATE INDEX IF NOT EXISTS idx_note_attempt_timestamp ON note_attempt(timestamp);"
+        ]),
+        Migration(version: 2, statements: [
+            """
+            CREATE TABLE IF NOT EXISTS mistake_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                seed INTEGER NOT NULL,
+                settingsJson TEXT NOT NULL,
+                clearanceDistance INTEGER NOT NULL DEFAULT 1,
+                questionsSinceQueued INTEGER NOT NULL DEFAULT 0,
+                queuedAt REAL NOT NULL
+            );
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_mistake_queue_queuedAt ON mistake_queue(queuedAt);"
         ])
     ]
 }

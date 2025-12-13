@@ -12,6 +12,9 @@ final class SettingsStore: ObservableObject {
     @Published var replayHotkeyEnabled: Bool {
         didSet { defaults.set(replayHotkeyEnabled, forKey: replayHotkeyKey) }
     }
+    @Published var schedulerMode: SchedulerMode {
+        didSet { defaults.set(schedulerMode.rawValue, forKey: schedulerModeKey) }
+    }
     /// The unique ID of the last selected MIDI output device
     @Published var lastSelectedOutputID: MIDIUniqueID? {
         didSet {
@@ -33,6 +36,7 @@ final class SettingsStore: ObservableObject {
     private let key = "com.sambender.miditrainer.settings"
     private let feedbackKey = "com.sambender.miditrainer.feedback"
     private let replayHotkeyKey = "com.sambender.miditrainer.replayHotkeyEnabled"
+    private let schedulerModeKey = "com.sambender.miditrainer.schedulerMode"
     private let lastOutputIDKey = "com.sambender.miditrainer.lastOutputID"
     private let lastOutputNameKey = "com.sambender.miditrainer.lastOutputName"
 
@@ -41,6 +45,12 @@ final class SettingsStore: ObservableObject {
         self.settings = SettingsStore.load(defaults: defaults, key: key) ?? PracticeSettingsSnapshot()
         self.feedback = SettingsStore.loadFeedback(defaults: defaults, key: feedbackKey) ?? FeedbackSettings()
         self.replayHotkeyEnabled = defaults.object(forKey: replayHotkeyKey) as? Bool ?? false
+        if let modeString = defaults.string(forKey: schedulerModeKey),
+           let mode = SchedulerMode(rawValue: modeString) {
+            self.schedulerMode = mode
+        } else {
+            self.schedulerMode = .spacedMistakes
+        }
         if let storedID = defaults.object(forKey: lastOutputIDKey) as? Int {
             self.lastSelectedOutputID = MIDIUniqueID(storedID)
         } else {

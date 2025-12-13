@@ -22,6 +22,7 @@ final class PracticeEngine: ObservableObject {
     private let attemptRepository: AttemptRepository
     private let feedbackSettings: () -> FeedbackSettings
     private let replayHotkeyEnabled: () -> Bool
+    private let schedulingCoordinator: SchedulingCoordinator?
     private var cancellables: Set<AnyCancellable> = []
 
     private var activeSession: (id: Int64, settingsSnapshotId: Int64, settings: PracticeSettingsSnapshot)?
@@ -39,6 +40,12 @@ final class PracticeEngine: ObservableObject {
     private var heldNotes: Set<UInt8> = []
     /// Pending action to execute when all keys are released
     private var pendingCompletionAction: (() -> Void)?
+    /// The seed used for the current sequence (for scheduler tracking)
+    private var currentSeed: UInt64?
+    /// If the current sequence is a re-ask, this is the mistake ID
+    private var currentMistakeId: Int64?
+    /// Whether we've already recorded a completion for the current sequence (to avoid duplicates on replays)
+    private var hasRecordedCompletion: Bool = false
 
     init(
         midiService: MIDIService,
@@ -51,7 +58,8 @@ final class PracticeEngine: ObservableObject {
         sequenceRepository: SequenceRepository,
         attemptRepository: AttemptRepository,
         feedbackSettings: @escaping () -> FeedbackSettings,
-        replayHotkeyEnabled: @escaping () -> Bool
+        replayHotkeyEnabled: @escaping () -> Bool,
+        schedulingCoordinator: SchedulingCoordinator? = nil
     ) {
         self.midiService = midiService
         self.sequenceGenerator = sequenceGenerator
@@ -64,15 +72,37 @@ final class PracticeEngine: ObservableObject {
         self.attemptRepository = attemptRepository
         self.feedbackSettings = feedbackSettings
         self.replayHotkeyEnabled = replayHotkeyEnabled
+        self.schedulingCoordinator = schedulingCoordinator
         bindMIDI()
     }
 
     func playQuestion(settings: PracticeSettingsSnapshot, seed: UInt64? = nil) {
+        // Determine what question to play via the scheduler
+        let questionToPlay: NextQuestion
+        if let coordinator = schedulingCoordinator {
+            questionToPlay = coordinator.nextQuestion(currentSettings: settings)
+        } else {
+            questionToPlay = .fresh
+        }
+        
+        switch questionToPlay {
+        case .fresh:
+            playFreshQuestion(settings: settings, seed: seed)
+        case .reask(let reaskSeed, let reaskSettings, let mistakeId):
+            playReaskQuestion(seed: reaskSeed, settings: reaskSettings, mistakeId: mistakeId)
+        }
+    }
+    
+    private func playFreshQuestion(settings: PracticeSettingsSnapshot, seed: UInt64? = nil) {
         do {
             let session = try ensureSession(for: settings)
-            let sequence = sequenceGenerator.generate(settings: settings, seed: seed)
+            let selectedSeed = seed ?? UInt64.random(in: .min ... .max)
+            let sequence = sequenceGenerator.generate(settings: settings, seed: selectedSeed)
             let ids = try sequenceRepository.insert(sequence: sequence, sessionId: session.id, settingsSnapshotId: session.settingsSnapshotId)
             currentSequenceIDs = ids
+            currentSeed = selectedSeed
+            currentMistakeId = nil
+            hasRecordedCompletion = false
             lastCorrectExpected = nil
             lastCorrectGuessed = nil
             currentInputIndex = 0
@@ -87,11 +117,44 @@ final class PracticeEngine: ObservableObject {
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.playbackFinished = true
-                    // If user has already completed all notes during playback, handle completion
                     if case .playing(let seq) = self.state, self.currentInputIndex >= seq.notes.count {
                         self.handleSequenceCompleted(sequence: seq, settings: settings)
                     } else if case .playing(let seq) = self.state {
-                        // Transition to awaiting input at whatever note we're on
+                        self.state = .awaitingInput(sequence: seq, expectedIndex: self.currentInputIndex)
+                    }
+                }
+            }
+        } catch {
+            // For now we silently fail; future milestone can surface errors to the UI.
+        }
+    }
+    
+    private func playReaskQuestion(seed: UInt64, settings: PracticeSettingsSnapshot, mistakeId: Int64) {
+        do {
+            let session = try ensureSession(for: settings)
+            let sequence = sequenceGenerator.generate(settings: settings, seed: seed)
+            let ids = try sequenceRepository.insert(sequence: sequence, sessionId: session.id, settingsSnapshotId: session.settingsSnapshotId)
+            currentSequenceIDs = ids
+            currentSeed = seed
+            currentMistakeId = mistakeId
+            hasRecordedCompletion = false
+            lastCorrectExpected = nil
+            lastCorrectGuessed = nil
+            currentInputIndex = 0
+            madeErrorInCurrentSequence = false
+            playbackFinished = false
+
+            DispatchQueue.main.async { [weak self] in
+                self?.state = .playing(sequence)
+            }
+
+            playbackScheduler.play(sequence: sequence) { [weak self] in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.playbackFinished = true
+                    if case .playing(let seq) = self.state, self.currentInputIndex >= seq.notes.count {
+                        self.handleSequenceCompleted(sequence: seq, settings: settings)
+                    } else if case .playing(let seq) = self.state {
                         self.state = .awaitingInput(sequence: seq, expectedIndex: self.currentInputIndex)
                     }
                 }
@@ -195,6 +258,17 @@ final class PracticeEngine: ObservableObject {
     
     private func handleSequenceCompleted(sequence: MelodySequence, settings: PracticeSettingsSnapshot?) {
         state = .completed(sequence)
+        
+        // Notify the scheduler of the completion (only once per sequence, not on replays)
+        if !hasRecordedCompletion, let seed = currentSeed, let settings = settings {
+            hasRecordedCompletion = true
+            schedulingCoordinator?.recordCompletion(
+                seed: seed,
+                settings: settings,
+                hadErrors: madeErrorInCurrentSequence,
+                mistakeId: currentMistakeId
+            )
+        }
         
         let delaySeconds = settings.map { 60.0 / Double($0.bpm) } ?? 0.5
         
