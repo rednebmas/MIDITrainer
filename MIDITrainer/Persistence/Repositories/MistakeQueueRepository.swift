@@ -28,8 +28,8 @@ final class MistakeQueueRepository {
             let settingsData = try encoder.encode(settings)
             let settingsJson = String(data: settingsData, encoding: .utf8) ?? "{}"
             sqlite3_bind_text(statement, 2, settingsJson, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_int(statement, 3, 1) // Initial minimum clearance distance
-            sqlite3_bind_int(statement, 4, 1) // Initial current clearance distance
+            sqlite3_bind_int(statement, 3, 3) // Initial minimum clearance distance
+            sqlite3_bind_int(statement, 4, 3) // Initial current clearance distance
             sqlite3_bind_int(statement, 5, 0) // Initial questions since queued
             sqlite3_bind_double(statement, 6, Date().timeIntervalSince1970)
             

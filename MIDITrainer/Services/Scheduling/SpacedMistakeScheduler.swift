@@ -23,7 +23,16 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     
     private func loadQueue() {
         do {
-            queue = try repository.loadAll()
+            queue = try repository.loadAll().map { queued in
+                var adjusted = queued
+                if adjusted.minimumClearanceDistance < 3 {
+                    adjusted.minimumClearanceDistance = 3
+                }
+                if adjusted.currentClearanceDistance < adjusted.minimumClearanceDistance {
+                    adjusted.currentClearanceDistance = adjusted.minimumClearanceDistance
+                }
+                return adjusted
+            }
         } catch {
             queue = []
         }
@@ -78,10 +87,10 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         guard let index = queue.firstIndex(where: { $0.id == mistakeId }) else { return }
         
         if hadErrors {
-            // Failed the re-ask: multiply clearance distance by 3, reset counter
+            // Failed the re-ask: bump clearance distance by 3, reset counter
             var mistake = queue[index]
-            mistake.minimumClearanceDistance *= 3
-            mistake.currentClearanceDistance = 1
+            mistake.minimumClearanceDistance += 3
+            mistake.currentClearanceDistance = mistake.minimumClearanceDistance
             mistake.questionsSinceQueued = 0
             queue[index] = mistake
             
@@ -90,7 +99,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                     id: mistakeId,
                     minimumClearanceDistance: mistake.minimumClearanceDistance,
                     currentClearanceDistance: mistake.currentClearanceDistance,
-                    questionsSinceQueued: 0
+                    questionsSinceQueued: mistake.questionsSinceQueued
                 )
             } catch {
                 // Log error but continue
