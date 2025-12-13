@@ -2,6 +2,17 @@ import Combine
 import CoreMIDI
 import Foundation
 
+struct SchedulerDebugEntry: Identifiable, Equatable {
+    let id: Int64
+    let seed: UInt64
+    let minimumClearanceDistance: Int
+    let currentClearanceDistance: Int
+    let questionsSinceQueued: Int
+    let remainingUntilDue: Int
+    let isDue: Bool
+    let isActive: Bool
+}
+
 final class PracticeModel: ObservableObject {
     @Published var availableInputs: [MIDIEndpoint] = []
     @Published var connectedInputs: [MIDIEndpoint] = []
@@ -17,6 +28,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var isReplaying: Bool = false
     @Published private(set) var pendingMistakeCount: Int = 0
     @Published private(set) var questionsUntilNextReask: Int?
+    @Published private(set) var schedulerDebugEntries: [SchedulerDebugEntry] = []
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -92,6 +104,29 @@ final class PracticeModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: \.questionsUntilNextReask, on: self)
             .store(in: &cancellables)
+        
+        Publishers.CombineLatest(
+            schedulingCoordinator.$queueSnapshot,
+            schedulingCoordinator.$activeMistakeId
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] queue, activeId in
+            let entries = queue.map { mistake -> SchedulerDebugEntry in
+                let remaining = max(mistake.currentClearanceDistance - mistake.questionsSinceQueued, 0)
+                return SchedulerDebugEntry(
+                    id: mistake.id,
+                    seed: mistake.seed,
+                    minimumClearanceDistance: mistake.minimumClearanceDistance,
+                    currentClearanceDistance: mistake.currentClearanceDistance,
+                    questionsSinceQueued: mistake.questionsSinceQueued,
+                    remainingUntilDue: remaining,
+                    isDue: mistake.isDue,
+                    isActive: mistake.id == activeId
+                )
+            }
+            self?.schedulerDebugEntries = entries
+        }
+        .store(in: &cancellables)
     }
     
     func clearMistakeQueue() {

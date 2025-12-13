@@ -105,6 +105,33 @@ struct PracticeView: View {
                             .buttonStyle(.bordered)
                         }
                     }
+                    
+                    if !model.schedulerDebugEntries.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Scheduler debug")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            
+                            ForEach(model.schedulerDebugEntries) { entry in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack {
+                                        Text("Seed \(entry.seed)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Spacer()
+                                        Text(schedulerStatusText(for: entry))
+                                            .font(.caption2)
+                                            .foregroundStyle(schedulerStatusColor(for: entry))
+                                    }
+                                    
+                                    Text("Spacing \(entry.questionsSinceQueued)/\(entry.currentClearanceDistance) • Min \(entry.minimumClearanceDistance) • Remaining \(entry.remainingUntilDue)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
                 }
 
                 Section("MIDI") {
@@ -211,6 +238,18 @@ struct PracticeView: View {
         } else {
             return .gray.opacity(0.4)
         }
+    }
+    
+    private func schedulerStatusText(for entry: SchedulerDebugEntry) -> String {
+        if entry.isActive { return "Playing" }
+        if entry.isDue { return "Due" }
+        return "Waiting"
+    }
+    
+    private func schedulerStatusColor(for entry: SchedulerDebugEntry) -> Color {
+        if entry.isActive { return .green }
+        if entry.isDue { return .orange }
+        return .secondary
     }
 }
 

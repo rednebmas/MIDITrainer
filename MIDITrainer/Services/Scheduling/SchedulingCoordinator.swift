@@ -6,6 +6,8 @@ final class SchedulingCoordinator: ObservableObject {
     @Published private(set) var mode: SchedulerMode
     @Published private(set) var pendingCount: Int = 0
     @Published private(set) var questionsUntilNextReask: Int?
+    @Published private(set) var queueSnapshot: [QueuedMistake] = []
+    @Published private(set) var activeMistakeId: Int64?
     
     private var activeScheduler: QuestionScheduler
     private let spacedScheduler: SpacedMistakeScheduler
@@ -43,6 +45,7 @@ final class SchedulingCoordinator: ObservableObject {
         case .random:
             activeScheduler = randomScheduler
         }
+        activeMistakeId = nil
         
         onModeChange(newMode)
         updatePublishedState()
@@ -51,6 +54,12 @@ final class SchedulingCoordinator: ObservableObject {
     /// Returns the next question to present.
     func nextQuestion(currentSettings: PracticeSettingsSnapshot) -> NextQuestion {
         let result = activeScheduler.nextQuestion(currentSettings: currentSettings)
+        switch result {
+        case .fresh:
+            activeMistakeId = nil
+        case .reask(_, _, let mistakeId):
+            activeMistakeId = mistakeId
+        }
         updatePublishedState()
         return result
     }
@@ -58,17 +67,20 @@ final class SchedulingCoordinator: ObservableObject {
     /// Records the completion of a sequence.
     func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?) {
         activeScheduler.recordCompletion(seed: seed, settings: settings, hadErrors: hadErrors, mistakeId: mistakeId)
+        activeMistakeId = nil
         updatePublishedState()
     }
     
     /// Clears all pending mistakes from the queue.
     func clearQueue() {
         spacedScheduler.clearQueue()
+        activeMistakeId = nil
         updatePublishedState()
     }
     
     private func updatePublishedState() {
         pendingCount = activeScheduler.pendingCount
         questionsUntilNextReask = activeScheduler.questionsUntilNextReask
+        queueSnapshot = activeScheduler.queueSnapshot
     }
 }

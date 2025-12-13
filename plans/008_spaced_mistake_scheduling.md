@@ -11,11 +11,15 @@ Introduce a configurable scheduling system that reinforces incorrect sequences b
   - When a sequence is answered incorrectly, add it to the queue with an initial clearance distance of 1 question.
   - After finishing that incorrect sequence, immediately ask a new (fresh) question.
   - After the fresh question, re-ask the queued incorrect sequence.
-  - If answered correctly on that re-ask, remove it from the queue.
-  - Future re-asks: require the current clearance distance’s intervening fresh questions before asking it again.
-    - If answered incorrectly on a re-ask, multiply its minimum clearance distance by 3 (1 → 3 → 9 → …), reset its counter, and requeue.
-  - A sequence is cleared when answered correctly on its due re-ask (at whatever minimum distance it currently holds).
-  - The queue operates on a first-in, first-out basis.
+  - Two distances are tracked:
+    - **Minimum clearance**: the distance that must eventually be achieved to clear the mistake.
+    - **Current spacing**: how many fresh questions are required before the next ask.
+  - When a mistake is answered incorrectly on a re-ask: multiply its **minimum clearance** by 3 (1 → 3 → 9 → …), set **current spacing** back to 1, reset its counter, and requeue.
+  - When a mistake is answered correctly on a re-ask:
+    - If it was asked at a spacing smaller than the minimum, bump **current spacing** up to the current minimum and keep it queued.
+    - If it was asked at or beyond its minimum clearance, remove it from the queue.
+  - Between asks, **current spacing** is enforced (fresh questions must fill the gap); minimum clearance only gates removal.
+- The queue operates on a first-in, first-out basis.
 - Support alternative scheduler modes:
   - “Spaced mistakes” (above).
   - “Random” (no reinforcement; just new questions).

@@ -8,10 +8,13 @@ import Foundation
 /// - After the required number of fresh questions, the mistake is re-asked.
 /// - If answered correctly on re-ask, it's removed from the queue.
 /// - If answered incorrectly on re-ask, clearance distance is multiplied by 3 and it's requeued.
+/// 
+/// Two distances are tracked:
+/// - minimumClearanceDistance: how far apart a correct re-ask must eventually be to clear the item (multiplies by 3 on each failed re-ask).
+/// - currentClearanceDistance: the immediate spacing required before the next re-ask (resets to 1 on failure, set up to the minimum on a success that is still below the minimum).
 final class SpacedMistakeScheduler: QuestionScheduler {
     private let repository: MistakeQueueRepository
     private var queue: [QueuedMistake] = []
-    private var justAskedFresh: Bool = false
     
     init(repository: MistakeQueueRepository) {
         self.repository = repository
@@ -39,25 +42,26 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     
     func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?) {
         if let mistakeId = mistakeId {
-            // This was a re-ask
+            incrementCounters(excluding: mistakeId)
             handleReaskCompletion(mistakeId: mistakeId, hadErrors: hadErrors)
         } else {
-            // This was a fresh question
+            incrementCounters()
             handleFreshCompletion(seed: seed, settings: settings, hadErrors: hadErrors)
         }
     }
     
-    private func handleFreshCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool) {
-        // Increment counters for all queued mistakes
+    private func incrementCounters(excluding excludedId: Int64? = nil) {
         do {
-            try repository.incrementAllCounters()
-            for i in queue.indices {
+            try repository.incrementAllCounters(excluding: excludedId)
+            for i in queue.indices where queue[i].id != excludedId {
                 queue[i].questionsSinceQueued += 1
             }
         } catch {
             // Log error but continue
         }
-        
+    }
+    
+    private func handleFreshCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool) {
         // If the fresh question had errors, add it to the queue
         if hadErrors {
             do {
@@ -76,26 +80,45 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         if hadErrors {
             // Failed the re-ask: multiply clearance distance by 3, reset counter
             var mistake = queue[index]
-            mistake.clearanceDistance *= 3
+            mistake.minimumClearanceDistance *= 3
+            mistake.currentClearanceDistance = 1
             mistake.questionsSinceQueued = 0
             queue[index] = mistake
             
             do {
                 try repository.update(
                     id: mistakeId,
-                    clearanceDistance: mistake.clearanceDistance,
+                    minimumClearanceDistance: mistake.minimumClearanceDistance,
+                    currentClearanceDistance: mistake.currentClearanceDistance,
                     questionsSinceQueued: 0
                 )
             } catch {
                 // Log error but continue
             }
         } else {
-            // Passed the re-ask: remove from queue
-            queue.remove(at: index)
-            do {
-                try repository.delete(id: mistakeId)
-            } catch {
-                // Log error but continue
+            // Passed the re-ask: clear if we satisfied the minimum, otherwise push out to the minimum spacing.
+            var mistake = queue[index]
+            mistake.questionsSinceQueued = 0
+            if mistake.currentClearanceDistance >= mistake.minimumClearanceDistance {
+                queue.remove(at: index)
+                do {
+                    try repository.delete(id: mistakeId)
+                } catch {
+                    // Log error but continue
+                }
+            } else {
+                mistake.currentClearanceDistance = mistake.minimumClearanceDistance
+                queue[index] = mistake
+                do {
+                    try repository.update(
+                        id: mistakeId,
+                        minimumClearanceDistance: mistake.minimumClearanceDistance,
+                        currentClearanceDistance: mistake.currentClearanceDistance,
+                        questionsSinceQueued: mistake.questionsSinceQueued
+                    )
+                } catch {
+                    // Log error but continue
+                }
             }
         }
     }
@@ -107,10 +130,14 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     var questionsUntilNextReask: Int? {
         // Find the minimum remaining questions until any mistake is due
         let remaining = queue.compactMap { mistake -> Int? in
-            let remaining = mistake.clearanceDistance - mistake.questionsSinceQueued
+            let remaining = mistake.currentClearanceDistance - mistake.questionsSinceQueued
             return remaining > 0 ? remaining : nil
         }
         return remaining.min()
+    }
+    
+    var queueSnapshot: [QueuedMistake] {
+        queue
     }
     
     func clearQueue() {

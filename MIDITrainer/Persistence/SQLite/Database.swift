@@ -138,6 +138,9 @@ extension Database {
             );
             """,
             "CREATE INDEX IF NOT EXISTS idx_mistake_queue_queuedAt ON mistake_queue(queuedAt);"
+        ]),
+        Migration(version: 3, statements: [
+            "ALTER TABLE mistake_queue ADD COLUMN currentClearanceDistance INTEGER NOT NULL DEFAULT 1;"
         ])
     ]
 }

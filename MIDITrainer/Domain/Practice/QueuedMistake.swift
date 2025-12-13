@@ -11,15 +11,18 @@ struct QueuedMistake: Equatable, Codable {
     /// The settings snapshot used to generate the sequence (captured at queue time).
     let settings: PracticeSettingsSnapshot
     
-    /// The minimum number of fresh questions required before this can be re-asked.
-    var clearanceDistance: Int
+    /// The minimum number of fresh questions required before this can be cleared.
+    var minimumClearanceDistance: Int
+    
+    /// The number of fresh questions required before the next re-ask.
+    var currentClearanceDistance: Int
     
     /// How many fresh questions have been answered since this was queued or last attempted.
     var questionsSinceQueued: Int
     
     /// Whether this mistake is due to be re-asked (has waited enough fresh questions).
     var isDue: Bool {
-        questionsSinceQueued >= clearanceDistance
+        questionsSinceQueued >= currentClearanceDistance
     }
     
     /// The timestamp when this mistake was first queued.
@@ -30,7 +33,8 @@ struct QueuedMistake: Equatable, Codable {
         self.id = id
         self.seed = seed
         self.settings = settings
-        self.clearanceDistance = 1
+        self.minimumClearanceDistance = 1
+        self.currentClearanceDistance = 1
         self.questionsSinceQueued = 0
         self.queuedAt = queuedAt
     }
@@ -40,14 +44,16 @@ struct QueuedMistake: Equatable, Codable {
         id: Int64,
         seed: UInt64,
         settings: PracticeSettingsSnapshot,
-        clearanceDistance: Int,
+        minimumClearanceDistance: Int,
+        currentClearanceDistance: Int,
         questionsSinceQueued: Int,
         queuedAt: Date
     ) {
         self.id = id
         self.seed = seed
         self.settings = settings
-        self.clearanceDistance = clearanceDistance
+        self.minimumClearanceDistance = minimumClearanceDistance
+        self.currentClearanceDistance = currentClearanceDistance
         self.questionsSinceQueued = questionsSinceQueued
         self.queuedAt = queuedAt
     }

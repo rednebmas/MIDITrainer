@@ -29,6 +29,9 @@ protocol QuestionScheduler: AnyObject {
     /// How many fresh questions until the next re-ask is due (nil if no re-asks pending).
     var questionsUntilNextReask: Int? { get }
     
+    /// Snapshot of the current queue (if any) for debugging/inspection.
+    var queueSnapshot: [QueuedMistake] { get }
+    
     /// Clears all pending mistakes from the queue.
     func clearQueue()
 }
@@ -45,6 +48,7 @@ final class RandomScheduler: QuestionScheduler {
     
     var pendingCount: Int { 0 }
     var questionsUntilNextReask: Int? { nil }
+    var queueSnapshot: [QueuedMistake] { [] }
     
     func clearQueue() {
         // Nothing to clear
