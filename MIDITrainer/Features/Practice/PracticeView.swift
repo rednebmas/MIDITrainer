@@ -58,21 +58,26 @@ struct PracticeView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(model.currentSequence == nil || model.isPlaying)
+
+                        Spacer()
+                        if model.isPlaying {
+                            Text(model.isReplaying ? "Replaying…" : "Playing…")
+                                .foregroundStyle(.secondary)
+                                .font(.footnote)
+                        }
                     }
 
                     if let name = firstNoteName {
-                        Text("First note: \(name)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text("First note:")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Text(name)
+                                .font(.footnote)
+                                .foregroundStyle(.primary)
+                        }
                     }
 
-                    if model.isPlaying {
-                        Text("Playing...")
-                            .foregroundStyle(.secondary)
-                    } else if let index = model.awaitingNoteIndex {
-                        Text("Awaiting note \(index + 1) of \(model.currentSequence?.notes.count ?? 0)")
-                            .foregroundStyle(.secondary)
-                    }
 
                     if let sequence = model.currentSequence {
                         progressDots(for: sequence)
@@ -166,6 +171,13 @@ struct PracticeView: View {
     }
 
     private func colorForNoteIndex(_ index: Int) -> Color {
+        if let errorIndex = model.errorNoteIndex, errorIndex == index {
+            return .red
+        }
+        // While playback is running, show a neutral state.
+        if model.isPlaying {
+            return .gray.opacity(0.4)
+        }
         guard let awaiting = model.awaitingNoteIndex else {
             return .green
         }
