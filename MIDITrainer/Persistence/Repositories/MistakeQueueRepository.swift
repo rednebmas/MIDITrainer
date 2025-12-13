@@ -10,7 +10,7 @@ final class MistakeQueueRepository {
     }
     
     /// Inserts a new mistake into the queue and returns its ID.
-    func insert(seed: UInt64, settings: PracticeSettingsSnapshot) throws -> Int64 {
+    func insert(seed: UInt64, settings: PracticeSettingsSnapshot, now: Date = Date()) throws -> QueuedMistake {
         try db.readWrite { handle in
             let sql = """
             INSERT INTO mistake_queue (seed, settingsJson, clearanceDistance, currentClearanceDistance, questionsSinceQueued, queuedAt)
@@ -28,16 +28,25 @@ final class MistakeQueueRepository {
             let settingsData = try encoder.encode(settings)
             let settingsJson = String(data: settingsData, encoding: .utf8) ?? "{}"
             sqlite3_bind_text(statement, 2, settingsJson, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_int(statement, 3, 3) // Initial minimum clearance distance
-            sqlite3_bind_int(statement, 4, 3) // Initial current clearance distance
-            sqlite3_bind_int(statement, 5, 0) // Initial questions since queued
-            sqlite3_bind_double(statement, 6, Date().timeIntervalSince1970)
+            sqlite3_bind_int(statement, 3, Int32(QueuedMistake.initialClearanceDistance))
+            sqlite3_bind_int(statement, 4, Int32(QueuedMistake.initialClearanceDistance))
+            sqlite3_bind_int(statement, 5, 0)
+            sqlite3_bind_double(statement, 6, now.timeIntervalSince1970)
             
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw DatabaseError.statementFailed(message: "Failed to insert mistake_queue")
             }
             
-            return sqlite3_last_insert_rowid(handle)
+            let id = sqlite3_last_insert_rowid(handle)
+            return QueuedMistake(
+                id: id,
+                seed: seed,
+                settings: settings,
+                minimumClearanceDistance: QueuedMistake.initialClearanceDistance,
+                currentClearanceDistance: QueuedMistake.initialClearanceDistance,
+                questionsSinceQueued: 0,
+                queuedAt: now
+            )
         }
     }
     

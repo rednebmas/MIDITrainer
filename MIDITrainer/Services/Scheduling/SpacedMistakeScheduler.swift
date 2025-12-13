@@ -3,15 +3,15 @@ import Foundation
 /// A scheduler that reinforces incorrect sequences by re-asking them after spaced intervals.
 /// 
 /// Behavior:
-/// - When a sequence is answered incorrectly, it's added to the queue with clearance distance 1.
+/// - When a sequence is answered incorrectly, it's added to the queue with clearance distance 3.
 /// - After finishing an incorrect sequence, a fresh question is always asked next.
 /// - After the required number of fresh questions, the mistake is re-asked.
 /// - If answered correctly on re-ask, it's removed from the queue.
-/// - If answered incorrectly on re-ask, clearance distance is multiplied by 3 and it's requeued.
+/// - If answered incorrectly on re-ask, clearance distance is increased by 3 and it's requeued.
 /// 
 /// Two distances are tracked:
-/// - minimumClearanceDistance: how far apart a correct re-ask must eventually be to clear the item (multiplies by 3 on each failed re-ask).
-/// - currentClearanceDistance: the immediate spacing required before the next re-ask (resets to 1 on failure, set up to the minimum on a success that is still below the minimum).
+/// - minimumClearanceDistance: how far apart a correct re-ask must eventually be to clear the item (increases by 3 on each failed re-ask).
+/// - currentClearanceDistance: the immediate spacing required before the next re-ask (set to the minimum on a failure, pushed up to the minimum on a success that is still below the minimum).
 final class SpacedMistakeScheduler: QuestionScheduler {
     private let repository: MistakeQueueRepository
     private var queue: [QueuedMistake] = []
@@ -25,12 +25,30 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         do {
             queue = try repository.loadAll().map { queued in
                 var adjusted = queued
-                if adjusted.minimumClearanceDistance < 3 {
-                    adjusted.minimumClearanceDistance = 3
+                var needsUpdate = false
+                
+                if adjusted.minimumClearanceDistance < QueuedMistake.initialClearanceDistance {
+                    adjusted.minimumClearanceDistance = QueuedMistake.initialClearanceDistance
+                    needsUpdate = true
                 }
                 if adjusted.currentClearanceDistance < adjusted.minimumClearanceDistance {
                     adjusted.currentClearanceDistance = adjusted.minimumClearanceDistance
+                    needsUpdate = true
                 }
+                
+                if needsUpdate {
+                    do {
+                        try repository.update(
+                            id: adjusted.id,
+                            minimumClearanceDistance: adjusted.minimumClearanceDistance,
+                            currentClearanceDistance: adjusted.currentClearanceDistance,
+                            questionsSinceQueued: adjusted.questionsSinceQueued
+                        )
+                    } catch {
+                        // Log error but continue with adjusted in-memory state
+                    }
+                }
+                
                 return adjusted
             }
         } catch {
@@ -74,8 +92,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         // If the fresh question had errors, add it to the queue
         if hadErrors {
             do {
-                let id = try repository.insert(seed: seed, settings: settings)
-                let mistake = QueuedMistake(id: id, seed: seed, settings: settings)
+                let mistake = try repository.insert(seed: seed, settings: settings)
                 queue.append(mistake)
             } catch {
                 // Log error but continue

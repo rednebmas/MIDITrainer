@@ -87,49 +87,14 @@ final class PracticeEngine: ObservableObject {
         
         switch questionToPlay {
         case .fresh:
-            playFreshQuestion(settings: settings, seed: seed)
-        case .reask(let reaskSeed, let reaskSettings, let mistakeId):
-            playReaskQuestion(seed: reaskSeed, settings: reaskSettings, mistakeId: mistakeId)
-        }
-    }
-    
-    private func playFreshQuestion(settings: PracticeSettingsSnapshot, seed: UInt64? = nil) {
-        do {
-            let session = try ensureSession(for: settings)
             let selectedSeed = seed ?? UInt64.random(in: .min ... .max)
-            let sequence = sequenceGenerator.generate(settings: settings, seed: selectedSeed)
-            let ids = try sequenceRepository.insert(sequence: sequence, sessionId: session.id, settingsSnapshotId: session.settingsSnapshotId)
-            currentSequenceIDs = ids
-            currentSeed = selectedSeed
-            currentMistakeId = nil
-            hasRecordedCompletion = false
-            lastCorrectExpected = nil
-            lastCorrectGuessed = nil
-            currentInputIndex = 0
-            madeErrorInCurrentSequence = false
-            playbackFinished = false
-
-            DispatchQueue.main.async { [weak self] in
-                self?.state = .playing(sequence)
-            }
-
-            playbackScheduler.play(sequence: sequence) { [weak self] in
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    self.playbackFinished = true
-                    if case .playing(let seq) = self.state, self.currentInputIndex >= seq.notes.count {
-                        self.handleSequenceCompleted(sequence: seq, settings: settings)
-                    } else if case .playing(let seq) = self.state {
-                        self.state = .awaitingInput(sequence: seq, expectedIndex: self.currentInputIndex)
-                    }
-                }
-            }
-        } catch {
-            // For now we silently fail; future milestone can surface errors to the UI.
+            startSequence(settings: settings, seed: selectedSeed, mistakeId: nil)
+        case .reask(let reaskSeed, let reaskSettings, let mistakeId):
+            startSequence(settings: reaskSettings, seed: reaskSeed, mistakeId: mistakeId)
         }
     }
     
-    private func playReaskQuestion(seed: UInt64, settings: PracticeSettingsSnapshot, mistakeId: Int64) {
+    private func startSequence(settings: PracticeSettingsSnapshot, seed: UInt64, mistakeId: Int64?) {
         do {
             let session = try ensureSession(for: settings)
             let sequence = sequenceGenerator.generate(settings: settings, seed: seed)

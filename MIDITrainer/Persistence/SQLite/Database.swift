@@ -57,92 +57,95 @@ extension Database {
         return baseURL.appendingPathComponent("miditrainer.sqlite").path
     }
 
-    static let defaultMigrations: [Migration] = [
-        Migration(version: 1, statements: [
-            """
-            CREATE TABLE IF NOT EXISTS settings_snapshot (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                keyRoot INTEGER NOT NULL,
-                scaleType TEXT NOT NULL,
-                excludedDegrees TEXT NOT NULL,
-                allowedOctaves TEXT NOT NULL,
-                melodyLength INTEGER NOT NULL,
-                bpm INTEGER NOT NULL,
-                createdAt REAL NOT NULL
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS practice_session (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                settingsSnapshotId INTEGER NOT NULL,
-                startedAt REAL NOT NULL
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS melody_sequence (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sessionId INTEGER NOT NULL,
-                settingsSnapshotId INTEGER NOT NULL,
-                seed INTEGER,
-                createdAt REAL NOT NULL
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS melody_note (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sequenceId INTEGER NOT NULL,
-                noteIndex INTEGER NOT NULL,
-                startBeat REAL NOT NULL,
-                durationBeats REAL NOT NULL,
-                midiNoteNumber INTEGER NOT NULL
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS note_attempt (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sessionId INTEGER NOT NULL,
-                sequenceId INTEGER NOT NULL,
-                melodyNoteId INTEGER,
-                noteIndexInMelody INTEGER NOT NULL,
-                expectedMidiNoteNumber INTEGER NOT NULL,
-                guessedMidiNoteNumber INTEGER NOT NULL,
-                expectedScaleDegree INTEGER,
-                guessedScaleDegree INTEGER,
-                expectedInterval INTEGER,
-                guessedInterval INTEGER,
-                isCorrect INTEGER NOT NULL,
-                timestamp REAL NOT NULL,
-                keyRoot INTEGER NOT NULL,
-                scaleType TEXT NOT NULL
-            );
-            """,
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_key ON note_attempt(keyRoot, scaleType);",
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_expectedScaleDegree ON note_attempt(expectedScaleDegree);",
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_guessedScaleDegree ON note_attempt(guessedScaleDegree);",
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_expectedInterval ON note_attempt(expectedInterval);",
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_guessedInterval ON note_attempt(guessedInterval);",
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_noteIndexInMelody ON note_attempt(noteIndexInMelody);",
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_sequenceId ON note_attempt(sequenceId);",
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_sessionId ON note_attempt(sessionId);",
-            "CREATE INDEX IF NOT EXISTS idx_note_attempt_timestamp ON note_attempt(timestamp);"
-        ]),
-        Migration(version: 2, statements: [
-            """
-            CREATE TABLE IF NOT EXISTS mistake_queue (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                seed INTEGER NOT NULL,
-                settingsJson TEXT NOT NULL,
-                clearanceDistance INTEGER NOT NULL DEFAULT 1,
-                questionsSinceQueued INTEGER NOT NULL DEFAULT 0,
-                queuedAt REAL NOT NULL
-            );
-            """,
-            "CREATE INDEX IF NOT EXISTS idx_mistake_queue_queuedAt ON mistake_queue(queuedAt);"
-        ]),
-        Migration(version: 3, statements: [
-            "ALTER TABLE mistake_queue ADD COLUMN currentClearanceDistance INTEGER NOT NULL DEFAULT 1;"
-        ])
-    ]
+    static let defaultMigrations: [Migration] = {
+        let initialClearance = QueuedMistake.initialClearanceDistance
+        return [
+            Migration(version: 1, statements: [
+                """
+                CREATE TABLE IF NOT EXISTS settings_snapshot (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    keyRoot INTEGER NOT NULL,
+                    scaleType TEXT NOT NULL,
+                    excludedDegrees TEXT NOT NULL,
+                    allowedOctaves TEXT NOT NULL,
+                    melodyLength INTEGER NOT NULL,
+                    bpm INTEGER NOT NULL,
+                    createdAt REAL NOT NULL
+                );
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS practice_session (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    settingsSnapshotId INTEGER NOT NULL,
+                    startedAt REAL NOT NULL
+                );
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS melody_sequence (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sessionId INTEGER NOT NULL,
+                    settingsSnapshotId INTEGER NOT NULL,
+                    seed INTEGER,
+                    createdAt REAL NOT NULL
+                );
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS melody_note (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sequenceId INTEGER NOT NULL,
+                    noteIndex INTEGER NOT NULL,
+                    startBeat REAL NOT NULL,
+                    durationBeats REAL NOT NULL,
+                    midiNoteNumber INTEGER NOT NULL
+                );
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS note_attempt (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sessionId INTEGER NOT NULL,
+                    sequenceId INTEGER NOT NULL,
+                    melodyNoteId INTEGER,
+                    noteIndexInMelody INTEGER NOT NULL,
+                    expectedMidiNoteNumber INTEGER NOT NULL,
+                    guessedMidiNoteNumber INTEGER NOT NULL,
+                    expectedScaleDegree INTEGER,
+                    guessedScaleDegree INTEGER,
+                    expectedInterval INTEGER,
+                    guessedInterval INTEGER,
+                    isCorrect INTEGER NOT NULL,
+                    timestamp REAL NOT NULL,
+                    keyRoot INTEGER NOT NULL,
+                    scaleType TEXT NOT NULL
+                );
+                """,
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_key ON note_attempt(keyRoot, scaleType);",
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_expectedScaleDegree ON note_attempt(expectedScaleDegree);",
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_guessedScaleDegree ON note_attempt(guessedScaleDegree);",
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_expectedInterval ON note_attempt(expectedInterval);",
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_guessedInterval ON note_attempt(guessedInterval);",
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_noteIndexInMelody ON note_attempt(noteIndexInMelody);",
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_sequenceId ON note_attempt(sequenceId);",
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_sessionId ON note_attempt(sessionId);",
+                "CREATE INDEX IF NOT EXISTS idx_note_attempt_timestamp ON note_attempt(timestamp);"
+            ]),
+            Migration(version: 2, statements: [
+                """
+                CREATE TABLE IF NOT EXISTS mistake_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    seed INTEGER NOT NULL,
+                    settingsJson TEXT NOT NULL,
+                    clearanceDistance INTEGER NOT NULL DEFAULT \(initialClearance),
+                    questionsSinceQueued INTEGER NOT NULL DEFAULT 0,
+                    queuedAt REAL NOT NULL
+                );
+                """,
+                "CREATE INDEX IF NOT EXISTS idx_mistake_queue_queuedAt ON mistake_queue(queuedAt);"
+            ]),
+            Migration(version: 3, statements: [
+                "ALTER TABLE mistake_queue ADD COLUMN currentClearanceDistance INTEGER NOT NULL DEFAULT \(initialClearance);"
+            ])
+        ]
+    }()
 }
 
 enum DatabaseError: Error {

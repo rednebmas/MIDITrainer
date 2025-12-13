@@ -2,6 +2,9 @@ import Foundation
 
 /// Represents a sequence that was answered incorrectly and is queued for re-asking.
 struct QueuedMistake: Equatable, Codable {
+    /// Shared initial spacing for new mistakes (kept in one place to avoid drift between runtime and persistence).
+    static let initialClearanceDistance = 3
+    
     /// Unique identifier for this queued entry (database row ID).
     let id: Int64
     
@@ -33,8 +36,8 @@ struct QueuedMistake: Equatable, Codable {
         self.id = id
         self.seed = seed
         self.settings = settings
-        self.minimumClearanceDistance = 1
-        self.currentClearanceDistance = 1
+        self.minimumClearanceDistance = Self.initialClearanceDistance
+        self.currentClearanceDistance = Self.initialClearanceDistance
         self.questionsSinceQueued = 0
         self.queuedAt = queuedAt
     }
