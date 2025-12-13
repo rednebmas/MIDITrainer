@@ -8,12 +8,24 @@ final class PracticeModel: ObservableObject {
     @Published var availableOutputs: [MIDIEndpoint] = []
     @Published private(set) var selectedOutputID: MIDIUniqueID?
     @Published private(set) var recentEvents: [String] = []
+    @Published private(set) var currentSequence: MelodySequence?
+    @Published private(set) var isPlaying: Bool = false
+    @Published var settings: PracticeSettingsSnapshot
 
     private let midiService: MIDIService
+    private let sequenceGenerator: SequenceGenerator
+    private let playbackScheduler: PlaybackScheduler
     private var cancellables: Set<AnyCancellable> = []
 
-    init(midiService: MIDIService) {
+    init(
+        midiService: MIDIService,
+        sequenceGenerator: SequenceGenerator = SequenceGenerator(),
+        settings: PracticeSettingsSnapshot = PracticeSettingsSnapshot()
+    ) {
         self.midiService = midiService
+        self.sequenceGenerator = sequenceGenerator
+        self.playbackScheduler = PlaybackScheduler(midiService: midiService)
+        self.settings = settings
         bind()
     }
 
@@ -41,6 +53,19 @@ final class PracticeModel: ObservableObject {
         DispatchQueue.global().asyncAfter(deadline: .now() + 0.4) { [weak midiService] in
             midiService?.send(noteOff: note)
         }
+    }
+
+    func playQuestion(seed: UInt64? = nil) {
+        let sequence = sequenceGenerator.generate(settings: settings, seed: seed)
+        DispatchQueue.main.async {
+            self.currentSequence = sequence
+        }
+        schedulePlayback(for: sequence)
+    }
+
+    func replay() {
+        guard let sequence = currentSequence else { return }
+        schedulePlayback(for: sequence)
     }
 
     private func bind() {
@@ -71,6 +96,18 @@ final class PracticeModel: ObservableObject {
                 self?.record(event: event)
             }
             .store(in: &cancellables)
+    }
+
+    private func schedulePlayback(for sequence: MelodySequence) {
+        DispatchQueue.main.async {
+            self.isPlaying = true
+        }
+
+        playbackScheduler.play(sequence: sequence) { [weak self] in
+            DispatchQueue.main.async {
+                self?.isPlaying = false
+            }
+        }
     }
 
     private func record(event: MIDINoteEvent) {

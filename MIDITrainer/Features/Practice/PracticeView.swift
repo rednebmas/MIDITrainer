@@ -62,6 +62,37 @@ struct PracticeView: View {
                     }
                 }
 
+                Section("Playback") {
+                    HStack {
+                        Text("BPM")
+                        Spacer()
+                        Text("\(model.settings.bpm)")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("Play Question") {
+                        model.playQuestion()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isPlaying)
+
+                    Button("Replay") {
+                        model.replay()
+                    }
+                    .disabled(model.currentSequence == nil || model.isPlaying)
+
+                    if let seed = model.currentSequence?.seed {
+                        Text("Seed: \(seed)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if model.isPlaying {
+                        Text("Playing...")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section("Recent MIDI") {
                     if model.recentEvents.isEmpty {
                         Text("Play a note on your controller to see events.")
