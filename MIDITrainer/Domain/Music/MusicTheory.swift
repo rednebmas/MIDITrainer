@@ -42,7 +42,26 @@ enum ScaleType: CaseIterable, Equatable {
     case dorian
     case mixolydian
 
-    fileprivate var semitoneOffsets: [Int] {
+    var storageKey: String {
+        switch self {
+        case .major: return "major"
+        case .naturalMinor: return "naturalMinor"
+        case .dorian: return "dorian"
+        case .mixolydian: return "mixolydian"
+        }
+    }
+
+    init?(storageKey: String) {
+        switch storageKey {
+        case "major": self = .major
+        case "naturalMinor": self = .naturalMinor
+        case "dorian": self = .dorian
+        case "mixolydian": self = .mixolydian
+        default: return nil
+        }
+    }
+
+    var semitoneOffsets: [Int] {
         switch self {
         case .major:
             return [0, 2, 4, 5, 7, 9, 11]

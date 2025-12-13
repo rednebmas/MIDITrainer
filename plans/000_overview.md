@@ -20,6 +20,9 @@
 - **006: Feedback polish**
   - Optional feedback (MIDI out root note/chord and/or simple local sound). Minor UX polish.
 
+- **007: Replay incorrect sequences**
+  - Surface sequences that contained mistakes and allow replaying them for focused practice.
+
 ## Global constraints (must remain true)
 
 - iPad-only, SwiftUI-only UI.

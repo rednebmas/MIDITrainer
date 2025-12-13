@@ -90,6 +90,9 @@ struct PracticeView: View {
                     if model.isPlaying {
                         Text("Playing...")
                             .foregroundStyle(.secondary)
+                    } else if let index = model.awaitingNoteIndex {
+                        Text("Awaiting note \(index + 1) of \(model.currentSequence?.notes.count ?? 0)")
+                            .foregroundStyle(.secondary)
                     }
                 }
 

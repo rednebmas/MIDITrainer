@@ -13,7 +13,7 @@ struct PracticeSettingsSnapshot: Equatable {
         scaleType: ScaleType = .major,
         excludedDegrees: Set<ScaleDegree> = [],
         allowedOctaves: [Int] = [3, 4, 5],
-        melodyLength: Int = 8,
+        melodyLength: Int = 4,
         bpm: Int = 80
     ) {
         self.key = key

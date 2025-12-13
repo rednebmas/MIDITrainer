@@ -10,11 +10,11 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var recentEvents: [String] = []
     @Published private(set) var currentSequence: MelodySequence?
     @Published private(set) var isPlaying: Bool = false
+    @Published private(set) var awaitingNoteIndex: Int?
     @Published var settings: PracticeSettingsSnapshot
 
     private let midiService: MIDIService
-    private let sequenceGenerator: SequenceGenerator
-    private let playbackScheduler: PlaybackScheduler
+    private let engine: PracticeEngine
     private var cancellables: Set<AnyCancellable> = []
 
     init(
@@ -23,9 +23,31 @@ final class PracticeModel: ObservableObject {
         settings: PracticeSettingsSnapshot = PracticeSettingsSnapshot()
     ) {
         self.midiService = midiService
-        self.sequenceGenerator = sequenceGenerator
-        self.playbackScheduler = PlaybackScheduler(midiService: midiService)
         self.settings = settings
+        let playbackScheduler = PlaybackScheduler(midiService: midiService)
+
+        let database: Database
+        do {
+            database = try Database()
+        } catch {
+            fatalError("Failed to open database: \(error)")
+        }
+
+        let settingsRepo = SettingsSnapshotRepository(db: database)
+        let sessionRepo = SessionRepository(db: database)
+        let sequenceRepo = SequenceRepository(db: database)
+        let attemptRepo = AttemptRepository(db: database)
+
+        self.engine = PracticeEngine(
+            midiService: midiService,
+            sequenceGenerator: sequenceGenerator,
+            playbackScheduler: playbackScheduler,
+            scoringService: ScoringService(),
+            settingsRepository: settingsRepo,
+            sessionRepository: sessionRepo,
+            sequenceRepository: sequenceRepo,
+            attemptRepository: attemptRepo
+        )
         bind()
     }
 
@@ -56,16 +78,11 @@ final class PracticeModel: ObservableObject {
     }
 
     func playQuestion(seed: UInt64? = nil) {
-        let sequence = sequenceGenerator.generate(settings: settings, seed: seed)
-        DispatchQueue.main.async {
-            self.currentSequence = sequence
-        }
-        schedulePlayback(for: sequence)
+        engine.playQuestion(settings: settings, seed: seed)
     }
 
     func replay() {
-        guard let sequence = currentSequence else { return }
-        schedulePlayback(for: sequence)
+        engine.replay()
     }
 
     private func bind() {
@@ -96,18 +113,30 @@ final class PracticeModel: ObservableObject {
                 self?.record(event: event)
             }
             .store(in: &cancellables)
-    }
 
-    private func schedulePlayback(for sequence: MelodySequence) {
-        DispatchQueue.main.async {
-            self.isPlaying = true
-        }
-
-        playbackScheduler.play(sequence: sequence) { [weak self] in
-            DispatchQueue.main.async {
-                self?.isPlaying = false
+        engine.$state
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self else { return }
+                switch state {
+                case .idle:
+                    self.isPlaying = false
+                    self.awaitingNoteIndex = nil
+                case .playing(let sequence):
+                    self.isPlaying = true
+                    self.currentSequence = sequence
+                    self.awaitingNoteIndex = nil
+                case .awaitingInput(let sequence, let expectedIndex):
+                    self.isPlaying = false
+                    self.currentSequence = sequence
+                    self.awaitingNoteIndex = expectedIndex
+                case .completed(let sequence):
+                    self.isPlaying = false
+                    self.currentSequence = sequence
+                    self.awaitingNoteIndex = nil
+                }
             }
-        }
+            .store(in: &cancellables)
     }
 
     private func record(event: MIDINoteEvent) {
