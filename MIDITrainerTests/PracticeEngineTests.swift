@@ -31,7 +31,10 @@ final class MockMIDIService: MIDIService {
     func selectOutput(_ endpoint: MIDIEndpoint?) {}
     func send(noteOn noteNumber: UInt8, velocity: UInt8) {}
     func send(noteOff noteNumber: UInt8) {}
-    
+    func injectNoteEvent(_ event: MIDINoteEvent) {
+        noteSubject.send(event)
+    }
+
     // Test helper to simulate note input
     func simulateNoteOn(_ noteNumber: UInt8, velocity: UInt8 = 100) {
         noteSubject.send(.noteOn(noteNumber: noteNumber, velocity: velocity))

@@ -39,7 +39,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var pendingMistakeCount: Int = 0
     @Published private(set) var questionsUntilNextReask: Int?
     @Published private(set) var schedulerDebugEntries: [SchedulerDebugEntry] = []
-
+    @Published private(set) var useOnScreenKeyboard: Bool = false
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -48,6 +48,7 @@ final class PracticeModel: ObservableObject {
     private let statsRepository: StatsRepository
     private let statsQueue = DispatchQueue(label: "com.sambender.miditrainer.practice.stats", qos: .userInitiated)
     private var cancellables: Set<AnyCancellable> = []
+    private let pianoSamplePlayer = PianoSamplePlayer()
 
     init(
         midiService: MIDIService,
@@ -57,7 +58,13 @@ final class PracticeModel: ObservableObject {
         self.midiService = midiService
         self.settingsStore = settingsStore
         self.settings = settingsStore.settings
-        let playbackScheduler = PlaybackScheduler(midiService: midiService)
+        // Initialize useOnScreenKeyboard early so the closure can capture it
+        let initialUseOnScreenKeyboard = settingsStore.useOnScreenKeyboard
+        let playbackScheduler = PlaybackScheduler(
+            midiService: midiService,
+            samplePlayer: pianoSamplePlayer,
+            useSamples: { [weak settingsStore] in settingsStore?.useOnScreenKeyboard ?? initialUseOnScreenKeyboard }
+        )
         let feedbackService = FeedbackService(midiService: midiService)
 
         let database: Database
@@ -104,6 +111,13 @@ final class PracticeModel: ObservableObject {
                 self?.refreshFirstTryAccuracy()
             }
             .store(in: &cancellables)
+
+        // Initialize on-screen keyboard state
+        useOnScreenKeyboard = settingsStore.useOnScreenKeyboard
+        if useOnScreenKeyboard {
+            selectedOutputName = "On-Screen Keyboard"
+        }
+
         bind()
         bindStats()
         bindScheduler()
@@ -192,6 +206,29 @@ final class PracticeModel: ObservableObject {
 
     func refreshEndpoints() {
         midiService.refreshEndpoints()
+    }
+
+    func setUseOnScreenKeyboard(_ enabled: Bool) {
+        useOnScreenKeyboard = enabled
+        settingsStore.useOnScreenKeyboard = enabled
+        if enabled {
+            selectedOutputName = "On-Screen Keyboard"
+        } else if let output = availableOutputs.first(where: { $0.id == selectedOutputID }) {
+            selectedOutputName = output.name
+        }
+    }
+
+    func injectNoteOn(_ noteNumber: UInt8) {
+        // Play sample for audio feedback
+        if useOnScreenKeyboard {
+            pianoSamplePlayer.play(midiNote: noteNumber, velocity: 100)
+        }
+        // Inject event so the practice engine can evaluate it
+        midiService.injectNoteEvent(.noteOn(noteNumber: noteNumber, velocity: 100))
+    }
+
+    func injectNoteOff(_ noteNumber: UInt8) {
+        midiService.injectNoteEvent(.noteOff(noteNumber: noteNumber))
     }
 
     func playQuestion(seed: UInt64? = nil) {
@@ -315,14 +352,13 @@ final class PracticeModel: ObservableObject {
 
     private func handleSequenceCompleted() {
         // Check engine state for whether this attempt had errors
-        // The engine tracks madeErrorInCurrentSequence (resets each attempt)
-        // and hadErrorsInSequence (persists across replays for same sequence)
-        let currentAttemptHadErrors = engine.hadErrorsInSequence && errorNoteIndex != nil
+        // madeErrorInCurrentAttempt resets each replay, hadErrorsInSequence persists
+        let currentAttemptHadErrors = engine.madeErrorInCurrentAttempt
 
-        // If the current attempt completed without errors
-        if errorNoteIndex == nil {
+        // If the current attempt completed without errors (won't replay)
+        if !currentAttemptHadErrors {
             if engine.hadErrorsInSequence {
-                // Got it right, but had errors on previous attempts
+                // Got it right, but had errors on previous attempts - counts as 1 question
                 settingsStore.incrementQuestionsAnswered()
                 latestFeedback = .correct
             } else {
@@ -332,7 +368,7 @@ final class PracticeModel: ObservableObject {
                 latestFeedback = .perfect
             }
         } else {
-            // Current attempt had errors - will replay
+            // Current attempt had errors - will replay, don't count yet
             settingsStore.resetStreak()
             latestFeedback = .tryAgain
         }

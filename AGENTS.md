@@ -43,9 +43,11 @@ This repo is a SwiftUI iPad app: a MIDI-based piano trainer. The app plays a 1-b
   - Deterministic generator tests (seeded).
   - Lightweight integration tests for migrations + key stats queries.
 
-## Build & test command
+## Build command
 
-- Preferred validation: `xcodebuild -project MIDITrainer.xcodeproj -scheme MIDITrainer -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build` 
+`xcodebuild -project MIDITrainer.xcodeproj -scheme MIDITrainer -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build` 
+
+Unit tests are slow, so for now just use build to verify correctness.
 
 ## Definition of “done” for a milestone
 

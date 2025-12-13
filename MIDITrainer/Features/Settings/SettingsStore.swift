@@ -46,6 +46,10 @@ final class SettingsStore: ObservableObject {
     @Published var currentStreak: Int {
         didSet { defaults.set(currentStreak, forKey: currentStreakKey) }
     }
+    /// Whether to use the on-screen keyboard instead of MIDI input
+    @Published var useOnScreenKeyboard: Bool {
+        didSet { defaults.set(useOnScreenKeyboard, forKey: useOnScreenKeyboardKey) }
+    }
 
     private let defaults: UserDefaults
     private let key = "com.sambender.miditrainer.settings"
@@ -58,6 +62,7 @@ final class SettingsStore: ObservableObject {
     private let questionsAnsweredTodayKey = "com.sambender.miditrainer.questionsAnsweredToday"
     private let lastPracticeDateKey = "com.sambender.miditrainer.lastPracticeDate"
     private let currentStreakKey = "com.sambender.miditrainer.currentStreak"
+    private let useOnScreenKeyboardKey = "com.sambender.miditrainer.useOnScreenKeyboard"
 
     private var todayDateString: String {
         let formatter = DateFormatter()
@@ -84,6 +89,7 @@ final class SettingsStore: ObservableObject {
         self.lastSelectedOutputName = defaults.string(forKey: lastOutputNameKey)
         self.dailyGoal = defaults.object(forKey: dailyGoalKey) as? Int ?? 30
         self.currentStreak = defaults.object(forKey: currentStreakKey) as? Int ?? 0
+        self.useOnScreenKeyboard = defaults.object(forKey: useOnScreenKeyboardKey) as? Bool ?? false
 
         // Check if it's a new day and reset daily count if needed
         let formatter = DateFormatter()
@@ -107,6 +113,11 @@ final class SettingsStore: ObservableObject {
     }
 
     func resetStreak() {
+        currentStreak = 0
+    }
+
+    func resetDailyStats() {
+        questionsAnsweredToday = 0
         currentStreak = 0
     }
 

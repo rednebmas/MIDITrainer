@@ -2,11 +2,15 @@ import Foundation
 
 final class PlaybackScheduler {
     private let midiService: MIDIService
+    private let samplePlayer: PianoSamplePlayer?
+    private let useSamples: () -> Bool
     private let queue = DispatchQueue(label: "com.sambender.miditrainer.playback")
     private var scheduledItems: [DispatchWorkItem] = []
 
-    init(midiService: MIDIService) {
+    init(midiService: MIDIService, samplePlayer: PianoSamplePlayer? = nil, useSamples: @escaping () -> Bool = { false }) {
         self.midiService = midiService
+        self.samplePlayer = samplePlayer
+        self.useSamples = useSamples
     }
 
     func play(sequence: MelodySequence, velocity: UInt8 = 96, completion: (() -> Void)? = nil) {
@@ -35,10 +39,19 @@ final class PlaybackScheduler {
             lastEnd = max(lastEnd, startSeconds + durationSeconds)
 
             let onItem = DispatchWorkItem { [weak self] in
-                self?.midiService.send(noteOn: note.midiNoteNumber, velocity: velocity)
+                guard let self else { return }
+                if self.useSamples(), let player = self.samplePlayer {
+                    player.play(midiNote: note.midiNoteNumber, velocity: velocity)
+                } else {
+                    self.midiService.send(noteOn: note.midiNoteNumber, velocity: velocity)
+                }
             }
             let offItem = DispatchWorkItem { [weak self] in
-                self?.midiService.send(noteOff: note.midiNoteNumber)
+                guard let self else { return }
+                if !self.useSamples() {
+                    self.midiService.send(noteOff: note.midiNoteNumber)
+                }
+                // Sample player handles note duration internally
             }
 
             scheduledItems.append(onItem)

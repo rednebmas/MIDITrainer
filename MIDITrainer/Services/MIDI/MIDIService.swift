@@ -17,4 +17,7 @@ protocol MIDIService: AnyObject {
     func selectOutput(_ endpoint: MIDIEndpoint?)
     func send(noteOn noteNumber: UInt8, velocity: UInt8)
     func send(noteOff noteNumber: UInt8)
+
+    /// Injects a virtual note event (for on-screen keyboard input)
+    func injectNoteEvent(_ event: MIDINoteEvent)
 }

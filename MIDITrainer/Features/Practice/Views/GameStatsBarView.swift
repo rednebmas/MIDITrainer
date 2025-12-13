@@ -30,8 +30,8 @@ struct GameStatsBarView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.primary.opacity(0.05))
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: 16)
         )
         .padding(.horizontal, 20)
     }

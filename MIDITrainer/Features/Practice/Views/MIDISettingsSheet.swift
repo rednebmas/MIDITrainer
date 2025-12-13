@@ -5,7 +5,9 @@ import SwiftUI
 struct MIDISettingsSheet: View {
     let availableOutputs: [MIDIEndpoint]
     let selectedOutputID: MIDIUniqueID?
+    let useOnScreenKeyboard: Bool
     let onSelectOutput: (MIDIUniqueID) -> Void
+    let onToggleOnScreenKeyboard: (Bool) -> Void
     let onBluetoothTap: () -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -32,6 +34,7 @@ struct MIDISettingsSheet: View {
 
                     ForEach(dedupedOutputs, id: \.id) { endpoint in
                         Button {
+                            onToggleOnScreenKeyboard(false)
                             onSelectOutput(endpoint.id)
                             dismiss()
                         } label: {
@@ -48,7 +51,7 @@ struct MIDISettingsSheet: View {
 
                                 Spacer()
 
-                                if endpoint.id == selectedOutputID {
+                                if !useOnScreenKeyboard && endpoint.id == selectedOutputID {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(.blue)
                                 }
@@ -57,7 +60,34 @@ struct MIDISettingsSheet: View {
                         .buttonStyle(.plain)
                     }
                 } header: {
-                    Text("MIDI Outputs")
+                    Text("MIDI Devices")
+                } footer: {
+                    Text("Connect a MIDI keyboard for the best experience")
+                }
+
+                Section {
+                    Button {
+                        onToggleOnScreenKeyboard(true)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "pianokeys")
+                            Text("On-Screen Keyboard")
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            if useOnScreenKeyboard {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("Virtual Input")
+                } footer: {
+                    Text("Use when you don't have a MIDI device connected")
                 }
 
                 Section {
@@ -71,7 +101,7 @@ struct MIDISettingsSheet: View {
                     }
                 }
             }
-            .navigationTitle("MIDI Settings")
+            .navigationTitle("Input Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -96,7 +126,9 @@ struct BluetoothMIDIPicker: UIViewControllerRepresentable {
     MIDISettingsSheet(
         availableOutputs: [],
         selectedOutputID: nil,
+        useOnScreenKeyboard: false,
         onSelectOutput: { _ in },
+        onToggleOnScreenKeyboard: { _ in },
         onBluetoothTap: {}
     )
 }

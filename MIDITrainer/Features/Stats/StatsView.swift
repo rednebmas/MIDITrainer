@@ -59,9 +59,10 @@ struct StatsView: View {
                 case .confirmReset:
                     return Alert(
                         title: Text("Reset history?"),
-                        message: Text("This will clear your practice attempts, sessions, sequences, and queued mistakes."),
+                        message: Text("This will clear your practice attempts, sessions, sequences, queued mistakes, and daily progress."),
                         primaryButton: .destructive(Text("Reset my history")) {
                             model.resetHistory()
+                            settingsStore.resetDailyStats()
                         },
                         secondaryButton: .cancel()
                     )

@@ -95,6 +95,10 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
         sendMessage([0x80, noteNumber, 0])
     }
 
+    func injectNoteEvent(_ event: MIDINoteEvent) {
+        noteSubject.send(event)
+    }
+
     private func sendMessage(_ bytes: [UInt8]) {
         midiQueue.async { [weak self] in
             guard

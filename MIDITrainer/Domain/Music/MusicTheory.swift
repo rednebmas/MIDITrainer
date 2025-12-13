@@ -83,6 +83,7 @@ enum ScaleDegree: Int, CaseIterable, Hashable, Codable {
     case v = 5
     case vi = 6
     case vii = 7
+    case viii = 8  // Octave above root
 }
 
 struct Scale: Equatable {
@@ -90,6 +91,8 @@ struct Scale: Equatable {
     let type: ScaleType
 
     func semitoneOffset(for degree: ScaleDegree) -> Int? {
+        // The octave (viii) is always 12 semitones above root
+        if degree == .viii { return 12 }
         guard let index = ScaleDegree.allCases.firstIndex(of: degree) else { return nil }
         return type.semitoneOffsets[index]
     }
