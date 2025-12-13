@@ -2,13 +2,7 @@
 
 This repo is a SwiftUI iPad app: a MIDI-based piano trainer. The app plays a 1-bar (4/4) melody over MIDI (constrained to a chosen scale/key), then waits for the user to play it back (pitch only). It records detailed mistakes (expected vs guessed scale degree + interval + note index) so we can graph systematic inaccuracies.
 
-Agents must execute the milestone plans under `plans/` in order.
-
 ## How to work in this repo
-
-- **Start here:** read `plans/000_overview.md`, then execute `plans/001_*.md`, `plans/002_*.md`, … in order.
-- **Plans are the source of truth** for requirements and architecture details. If scope changes, update the relevant plan(s) first.
-- **Plans must not contain code.** They may include file names, schemas, and acceptance criteria.
 
 ## Non-negotiable engineering rules
 
@@ -56,5 +50,6 @@ Agents must execute the milestone plans under `plans/` in order.
 ## Definition of “done” for a milestone
 
 - Plan acceptance criteria are met.
+- Plans must not contain code. They may include file names, schemas, and acceptance criteria.
 - Core business logic has tests where appropriate.
 - No obvious duplication; responsibilities are cleanly split.
