@@ -200,18 +200,18 @@ final class PracticeModel: ObservableObject {
     private func autoSelectLastOutputIfNeeded(outputs: [MIDIEndpoint]) {
         // Only auto-select if we don't already have a selection
         guard selectedOutputID == nil, !outputs.isEmpty else { return }
-        
-        // Try to match by ID first (most reliable)
+
+        // Try to match by ID first (most reliable), but skip offline devices
         if let lastID = settingsStore.lastSelectedOutputID,
-           let matchingEndpoint = outputs.first(where: { $0.id == lastID }) {
+           let matchingEndpoint = outputs.first(where: { $0.id == lastID && !$0.isOffline }) {
             midiService.selectOutput(matchingEndpoint)
             connectMatchingInput(for: matchingEndpoint)
             return
         }
-        
-        // Fall back to matching by name (Bluetooth devices may get new IDs)
+
+        // Fall back to matching by name (Bluetooth devices may get new IDs), skip offline
         if let lastName = settingsStore.lastSelectedOutputName,
-           let matchingEndpoint = outputs.first(where: { $0.name == lastName }) {
+           let matchingEndpoint = outputs.first(where: { $0.name == lastName && !$0.isOffline }) {
             midiService.selectOutput(matchingEndpoint)
             connectMatchingInput(for: matchingEndpoint)
             // Update the stored ID to the new one

@@ -45,7 +45,7 @@ This repo is a SwiftUI iPad app: a MIDI-based piano trainer. The app plays a 1-b
 
 ## Build & test command
 
-- Preferred validation: `xcodebuild -scheme MIDITrainer -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -sdk iphonesimulator build` 
+- Preferred validation: `xcodebuild -project MIDITrainer.xcodeproj -scheme MIDITrainer -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build` 
 
 ## Definition of “done” for a milestone
 

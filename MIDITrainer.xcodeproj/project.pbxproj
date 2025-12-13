@@ -14,19 +14,11 @@
 			remoteGlobalIDString = 22F59DB72EECF68F00B68480;
 			remoteInfo = MIDITrainer;
 		};
-		22F59DD02EECF69100B68480 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 22F59DB02EECF68F00B68480 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 22F59DB72EECF68F00B68480;
-			remoteInfo = MIDITrainer;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		22F59DB82EECF68F00B68480 /* MIDITrainer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MIDITrainer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		22F59DC52EECF69100B68480 /* MIDITrainerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MIDITrainerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		22F59DCF2EECF69100B68480 /* MIDITrainerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MIDITrainerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -38,11 +30,6 @@
 		22F59DC82EECF69100B68480 /* MIDITrainerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MIDITrainerTests;
-			sourceTree = "<group>";
-		};
-		22F59DD22EECF69100B68480 /* MIDITrainerUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = MIDITrainerUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -62,13 +49,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		22F59DCC2EECF69100B68480 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -77,7 +57,6 @@
 			children = (
 				22F59DBA2EECF68F00B68480 /* MIDITrainer */,
 				22F59DC82EECF69100B68480 /* MIDITrainerTests */,
-				22F59DD22EECF69100B68480 /* MIDITrainerUITests */,
 				22F59DB92EECF68F00B68480 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -87,7 +66,6 @@
 			children = (
 				22F59DB82EECF68F00B68480 /* MIDITrainer.app */,
 				22F59DC52EECF69100B68480 /* MIDITrainerTests.xctest */,
-				22F59DCF2EECF69100B68480 /* MIDITrainerUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -140,29 +118,6 @@
 			productReference = 22F59DC52EECF69100B68480 /* MIDITrainerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		22F59DCE2EECF69100B68480 /* MIDITrainerUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 22F59DDF2EECF69100B68480 /* Build configuration list for PBXNativeTarget "MIDITrainerUITests" */;
-			buildPhases = (
-				22F59DCB2EECF69100B68480 /* Sources */,
-				22F59DCC2EECF69100B68480 /* Frameworks */,
-				22F59DCD2EECF69100B68480 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				22F59DD12EECF69100B68480 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				22F59DD22EECF69100B68480 /* MIDITrainerUITests */,
-			);
-			name = MIDITrainerUITests;
-			packageProductDependencies = (
-			);
-			productName = MIDITrainerUITests;
-			productReference = 22F59DCF2EECF69100B68480 /* MIDITrainerUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -177,10 +132,6 @@
 						CreatedOnToolsVersion = 26.1.1;
 					};
 					22F59DC42EECF69100B68480 = {
-						CreatedOnToolsVersion = 26.1.1;
-						TestTargetID = 22F59DB72EECF68F00B68480;
-					};
-					22F59DCE2EECF69100B68480 = {
 						CreatedOnToolsVersion = 26.1.1;
 						TestTargetID = 22F59DB72EECF68F00B68480;
 					};
@@ -202,7 +153,6 @@
 			targets = (
 				22F59DB72EECF68F00B68480 /* MIDITrainer */,
 				22F59DC42EECF69100B68480 /* MIDITrainerTests */,
-				22F59DCE2EECF69100B68480 /* MIDITrainerUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -216,13 +166,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		22F59DC32EECF69100B68480 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		22F59DCD2EECF69100B68480 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -246,13 +189,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		22F59DCB2EECF69100B68480 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -260,11 +196,6 @@
 			isa = PBXTargetDependency;
 			target = 22F59DB72EECF68F00B68480 /* MIDITrainer */;
 			targetProxy = 22F59DC62EECF69100B68480 /* PBXContainerItemProxy */;
-		};
-		22F59DD12EECF69100B68480 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 22F59DB72EECF68F00B68480 /* MIDITrainer */;
-			targetProxy = 22F59DD02EECF69100B68480 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -504,46 +435,6 @@
 			};
 			name = Release;
 		};
-		22F59DE02EECF69100B68480 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 98D5PKHV7Y;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sambender.MIDITrainerUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = MIDITrainer;
-			};
-			name = Debug;
-		};
-		22F59DE12EECF69100B68480 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 98D5PKHV7Y;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sambender.MIDITrainerUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = MIDITrainer;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -570,15 +461,6 @@
 			buildConfigurations = (
 				22F59DDD2EECF69100B68480 /* Debug */,
 				22F59DDE2EECF69100B68480 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		22F59DDF2EECF69100B68480 /* Build configuration list for PBXNativeTarget "MIDITrainerUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				22F59DE02EECF69100B68480 /* Debug */,
-				22F59DE12EECF69100B68480 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

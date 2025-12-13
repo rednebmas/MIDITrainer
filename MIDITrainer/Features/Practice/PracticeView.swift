@@ -140,13 +140,17 @@ struct PracticeView: View {
                         Text("No MIDI outputs available")
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     Picker("Destination", selection: outputSelectionBinding) {
                         if dedupedOutputs.isEmpty {
                             Text("None").tag(OutputChoice.bluetooth)
                         }
                         ForEach(dedupedOutputs, id: \.id) { endpoint in
-                            Text(endpoint.name).tag(OutputChoice.endpoint(endpoint.id))
+                            if endpoint.isOffline {
+                                Text("\(endpoint.name) (offline)").tag(OutputChoice.endpoint(endpoint.id))
+                            } else {
+                                Text(endpoint.name).tag(OutputChoice.endpoint(endpoint.id))
+                            }
                         }
                         Text("Bluetooth MIDI…").tag(OutputChoice.bluetooth)
                     }

@@ -172,11 +172,15 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
     private func seedDesiredInputsIfNeeded(from sources: [EndpointHandle]) {}
 
     private func updateSelectionIfNeeded(destinations: [MIDIEndpoint]) {
-        if let selectedOutputID, destinations.contains(where: { $0.id == selectedOutputID }) {
+        // Check if current selection is still valid and online
+        if let selectedOutputID,
+           let selectedDevice = destinations.first(where: { $0.id == selectedOutputID }),
+           !selectedDevice.isOffline {
             return
         }
 
-        selectedOutputID = destinations.first?.id
+        // Clear selection if device is missing or offline; select first online device if available
+        selectedOutputID = destinations.first(where: { !$0.isOffline })?.id
         updatePublishedState()
     }
 
@@ -233,7 +237,9 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
             ?? stringProperty(for: ref, property: kMIDIPropertyName)
             ?? "Unknown"
 
-        return MIDIEndpoint(id: uniqueID, name: name)
+        let isOffline = integerProperty(for: ref, property: kMIDIPropertyOffline) != 0
+
+        return MIDIEndpoint(id: uniqueID, name: name, isOffline: isOffline)
     }
 
     private func integerProperty(for ref: MIDIObjectRef, property: CFString) -> MIDIUniqueID {
