@@ -41,6 +41,10 @@ Agents must execute the milestone plans under `plans/` in order.
   - Deterministic generator tests (seeded).
   - Lightweight integration tests for migrations + key stats queries.
 
+## Build & test command
+
+- Preferred validation: `xcodebuild -scheme MIDITrainer -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -sdk iphonesimulator build` (uses the installed iPad Pro 11-inch (M5) simulator runtime).
+
 ## Definition of “done” for a milestone
 
 - Plan acceptance criteria are met.

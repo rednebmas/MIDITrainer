@@ -2,6 +2,7 @@ import SwiftUI
 import Charts
 
 struct StatsView: View {
+    @EnvironmentObject private var settingsStore: SettingsStore
     @StateObject private var model = StatsModel()
 
     var body: some View {
@@ -37,6 +38,9 @@ struct StatsView: View {
             .navigationTitle("Stats")
             .onAppear {
                 model.refresh()
+            }
+            .onReceive(settingsStore.$settings) { newSettings in
+                model.updateCurrentSettings(newSettings)
             }
         }
     }

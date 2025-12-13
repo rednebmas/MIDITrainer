@@ -1,6 +1,6 @@
 import Foundation
 
-enum NoteName: Int, CaseIterable, Equatable {
+enum NoteName: Int, CaseIterable, Equatable, Codable {
     case c = 0
     case cSharp = 1
     case d = 2
@@ -32,11 +32,11 @@ enum NoteName: Int, CaseIterable, Equatable {
     }
 }
 
-struct Key: Equatable {
+struct Key: Equatable, Codable {
     let root: NoteName
 }
 
-enum ScaleType: CaseIterable, Equatable {
+enum ScaleType: String, CaseIterable, Equatable, Codable {
     case major
     case naturalMinor
     case dorian
@@ -75,7 +75,7 @@ enum ScaleType: CaseIterable, Equatable {
     }
 }
 
-enum ScaleDegree: Int, CaseIterable, Hashable {
+enum ScaleDegree: Int, CaseIterable, Hashable, Codable {
     case i = 1
     case ii = 2
     case iii = 3

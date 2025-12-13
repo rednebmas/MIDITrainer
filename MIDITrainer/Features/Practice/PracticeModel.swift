@@ -19,11 +19,11 @@ final class PracticeModel: ObservableObject {
 
     init(
         midiService: MIDIService,
-        sequenceGenerator: SequenceGenerator = SequenceGenerator(),
-        settings: PracticeSettingsSnapshot = PracticeSettingsSnapshot()
+        settingsStore: SettingsStore,
+        sequenceGenerator: SequenceGenerator = SequenceGenerator()
     ) {
         self.midiService = midiService
-        self.settings = settings
+        self.settings = settingsStore.settings
         let playbackScheduler = PlaybackScheduler(midiService: midiService)
 
         let database: Database
@@ -48,6 +48,12 @@ final class PracticeModel: ObservableObject {
             sequenceRepository: sequenceRepo,
             attemptRepository: attemptRepo
         )
+        settingsStore.$settings
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newSettings in
+                self?.settings = newSettings
+            }
+            .store(in: &cancellables)
         bind()
     }
 

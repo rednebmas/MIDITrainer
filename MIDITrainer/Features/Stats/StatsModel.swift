@@ -17,7 +17,7 @@ final class StatsModel: ObservableObject {
     }
 
     private let statsRepository: StatsRepository
-    private let currentSettings: PracticeSettingsSnapshot
+    private var currentSettings: PracticeSettingsSnapshot
     private let queue = DispatchQueue(label: "com.sambender.miditrainer.stats", qos: .userInitiated)
 
     init(currentSettings: PracticeSettingsSnapshot = PracticeSettingsSnapshot()) {
@@ -47,6 +47,13 @@ final class StatsModel: ObservableObject {
                 self.intervalBuckets = intervals
                 self.noteIndexBuckets = noteIndexes
             }
+        }
+    }
+
+    func updateCurrentSettings(_ settings: PracticeSettingsSnapshot) {
+        currentSettings = settings
+        if scope == .currentKey {
+            refresh()
         }
     }
 }

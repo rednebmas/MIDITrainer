@@ -7,8 +7,8 @@ struct PracticeView: View {
     @StateObject private var model: PracticeModel
     @State private var showingBluetoothPicker = false
 
-    init(midiService: MIDIService) {
-        _model = StateObject(wrappedValue: PracticeModel(midiService: midiService))
+    init(midiService: MIDIService, settingsStore: SettingsStore) {
+        _model = StateObject(wrappedValue: PracticeModel(midiService: midiService, settingsStore: settingsStore))
     }
 
     private var firstNoteName: String? {

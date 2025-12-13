@@ -1,12 +1,12 @@
 import Foundation
 
-struct PracticeSettingsSnapshot: Equatable {
-    let key: Key
-    let scaleType: ScaleType
-    let excludedDegrees: Set<ScaleDegree>
-    let allowedOctaves: [Int]
-    let melodyLength: Int
-    let bpm: Int
+struct PracticeSettingsSnapshot: Equatable, Codable {
+    var key: Key
+    var scaleType: ScaleType
+    var excludedDegrees: Set<ScaleDegree>
+    var allowedOctaves: [Int]
+    var melodyLength: Int
+    var bpm: Int
 
     init(
         key: Key = Key(root: .c),

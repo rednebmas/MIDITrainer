@@ -9,10 +9,11 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var midiService: CoreMIDIAdapter
+    @EnvironmentObject private var settingsStore: SettingsStore
 
     var body: some View {
         TabView {
-            PracticeView(midiService: midiService)
+            PracticeView(midiService: midiService, settingsStore: settingsStore)
                 .tabItem {
                     Label("Practice", systemImage: "pianokeys")
                 }
