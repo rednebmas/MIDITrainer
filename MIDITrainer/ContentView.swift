@@ -8,17 +8,24 @@
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+    @EnvironmentObject private var midiService: CoreMIDIAdapter
 
-#Preview {
-    ContentView()
+    var body: some View {
+        TabView {
+            PracticeView(midiService: midiService)
+                .tabItem {
+                    Label("Practice", systemImage: "pianokeys")
+                }
+
+            StatsView()
+                .tabItem {
+                    Label("Stats", systemImage: "chart.bar.fill")
+                }
+
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape.fill")
+                }
+        }
+    }
 }

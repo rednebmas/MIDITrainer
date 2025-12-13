@@ -9,9 +9,18 @@ import SwiftUI
 
 @main
 struct MIDITrainerApp: App {
+    @StateObject private var midiService = CoreMIDIAdapter()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(midiService)
+                .onAppear {
+                    midiService.start()
+                }
+                .onDisappear {
+                    midiService.stop()
+                }
         }
     }
 }
