@@ -27,6 +27,14 @@ Agents must execute the milestone plans under `plans/` in order.
   - **Octave-sensitive** correctness (MIDI note number must match).
   - Input matching: do not advance to the next note until the current expected note is played correctly; record every wrong attempt.
 
+## Game flow rules
+
+- **Input during playback:** User can start playing the sequence as soon as playback begins (no need to wait for playback to finish).
+- **Auto-advance on success:** When the user completes a sequence with no errors, wait until all MIDI keys are released, then wait 1 beat, then automatically start the next question.
+- **Auto-replay on error:** When the user completes a sequence but made any errors, wait until all MIDI keys are released, then wait 1 beat, then replay the same sequence. Repeat until they get it perfect.
+- **MIDI device selection:** Selecting an output device also connects the matching input device (same name) for bidirectional MIDI.
+- **Device persistence:** The last selected MIDI device is remembered and auto-selected on app restart.
+
 ## Architecture principles (high level)
 
 - **Layering:**
@@ -43,7 +51,7 @@ Agents must execute the milestone plans under `plans/` in order.
 
 ## Build & test command
 
-- Preferred validation: `xcodebuild -scheme MIDITrainer -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -sdk iphonesimulator build` (uses the installed iPad Pro 11-inch (M5) simulator runtime).
+- Preferred validation: `xcodebuild -scheme MIDITrainer -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -sdk iphonesimulator build` 
 
 ## Definition of “done” for a milestone
 

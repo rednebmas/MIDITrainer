@@ -28,6 +28,17 @@ final class PracticeEngine: ObservableObject {
     private var currentSequenceIDs: PersistedSequenceIDs?
     private var lastCorrectExpected: UInt8?
     private var lastCorrectGuessed: UInt8?
+    
+    /// Tracks the current note index during playback+input phase
+    private var currentInputIndex: Int = 0
+    /// Tracks whether any mistake was made in the current sequence
+    private var madeErrorInCurrentSequence: Bool = false
+    /// Whether playback has finished (user can still input during playback)
+    private var playbackFinished: Bool = false
+    /// Tracks currently held MIDI notes for detecting when all keys are released
+    private var heldNotes: Set<UInt8> = []
+    /// Pending action to execute when all keys are released
+    private var pendingCompletionAction: (() -> Void)?
 
     init(
         midiService: MIDIService,
@@ -64,6 +75,9 @@ final class PracticeEngine: ObservableObject {
             currentSequenceIDs = ids
             lastCorrectExpected = nil
             lastCorrectGuessed = nil
+            currentInputIndex = 0
+            madeErrorInCurrentSequence = false
+            playbackFinished = false
 
             DispatchQueue.main.async { [weak self] in
                 self?.state = .playing(sequence)
@@ -71,7 +85,15 @@ final class PracticeEngine: ObservableObject {
 
             playbackScheduler.play(sequence: sequence) { [weak self] in
                 DispatchQueue.main.async {
-                    self?.state = .awaitingInput(sequence: sequence, expectedIndex: 0)
+                    guard let self else { return }
+                    self.playbackFinished = true
+                    // If user has already completed all notes during playback, handle completion
+                    if case .playing(let seq) = self.state, self.currentInputIndex >= seq.notes.count {
+                        self.handleSequenceCompleted(sequence: seq, settings: settings)
+                    } else if case .playing(let seq) = self.state {
+                        // Transition to awaiting input at whatever note we're on
+                        self.state = .awaitingInput(sequence: seq, expectedIndex: self.currentInputIndex)
+                    }
                 }
             }
         } catch {
@@ -83,11 +105,25 @@ final class PracticeEngine: ObservableObject {
         midiService.noteEvents
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard case let .noteOn(noteNumber, _) = event else { return }
-                if self?.handleReplayHotkey(noteNumber: noteNumber) == true { return }
-                self?.handle(noteOn: noteNumber)
+                guard let self else { return }
+                switch event {
+                case .noteOn(let noteNumber, _):
+                    self.heldNotes.insert(noteNumber)
+                    if self.handleReplayHotkey(noteNumber: noteNumber) { return }
+                    self.handle(noteOn: noteNumber)
+                case .noteOff(let noteNumber):
+                    self.heldNotes.remove(noteNumber)
+                    self.checkPendingCompletionAction()
+                }
             }
             .store(in: &cancellables)
+    }
+    
+    /// Checks if all keys are released and executes pending action if so
+    private func checkPendingCompletionAction() {
+        guard heldNotes.isEmpty, let action = pendingCompletionAction else { return }
+        pendingCompletionAction = nil
+        action()
     }
 
     private func handleReplayHotkey(noteNumber: UInt8) -> Bool {
@@ -101,7 +137,21 @@ final class PracticeEngine: ObservableObject {
     }
 
     private func handle(noteOn noteNumber: UInt8) {
-        guard case let .awaitingInput(sequence, expectedIndex) = state else { return }
+        // Get the current sequence from either playing or awaitingInput state
+        let sequence: MelodySequence
+        let expectedIndex: Int
+        
+        switch state {
+        case .playing(let seq):
+            sequence = seq
+            expectedIndex = currentInputIndex
+        case .awaitingInput(let seq, let idx):
+            sequence = seq
+            expectedIndex = idx
+        default:
+            return
+        }
+        
         guard expectedIndex < sequence.notes.count else { return }
 
         let expectedNote = sequence.notes[expectedIndex]
@@ -123,14 +173,71 @@ final class PracticeEngine: ObservableObject {
             lastCorrectExpected = expectedNote.midiNoteNumber
             lastCorrectGuessed = noteNumber
             let nextIndex = expectedIndex + 1
+            currentInputIndex = nextIndex
+            
             if nextIndex >= sequence.notes.count {
-                DispatchQueue.main.async { [weak self] in
-                    self?.state = .completed(sequence)
+                // User finished the sequence
+                if playbackFinished {
+                    handleSequenceCompleted(sequence: sequence, settings: activeSession?.settings)
                 }
-                feedbackService.playSequenceSuccess(for: sequence.key, settings: feedbackSettings())
+                // If playback hasn't finished, the completion callback will handle it
             } else {
-                DispatchQueue.main.async { [weak self] in
-                    self?.state = .awaitingInput(sequence: sequence, expectedIndex: nextIndex)
+                // Update state to show progress (only if not in playing state)
+                if case .awaitingInput = state {
+                    state = .awaitingInput(sequence: sequence, expectedIndex: nextIndex)
+                }
+            }
+        } else {
+            // Record that an error was made
+            madeErrorInCurrentSequence = true
+        }
+    }
+    
+    private func handleSequenceCompleted(sequence: MelodySequence, settings: PracticeSettingsSnapshot?) {
+        state = .completed(sequence)
+        
+        let delaySeconds = settings.map { 60.0 / Double($0.bpm) } ?? 0.5
+        
+        let action: () -> Void = { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
+                guard let self else { return }
+                if self.madeErrorInCurrentSequence {
+                    self.replayCurrentSequence(sequence: sequence, settings: settings)
+                } else {
+                    self.feedbackService.playSequenceSuccess(for: sequence.key, settings: self.feedbackSettings())
+                    if let settings {
+                        self.playQuestion(settings: settings)
+                    }
+                }
+            }
+        }
+        
+        // Wait for all keys to be released before triggering the delay
+        if heldNotes.isEmpty {
+            action()
+        } else {
+            pendingCompletionAction = action
+        }
+    }
+    
+    private func replayCurrentSequence(sequence: MelodySequence, settings: PracticeSettingsSnapshot?) {
+        lastCorrectExpected = nil
+        lastCorrectGuessed = nil
+        currentInputIndex = 0
+        madeErrorInCurrentSequence = false
+        playbackFinished = false
+
+        state = .playing(sequence)
+
+        playbackScheduler.play(sequence: sequence) { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.playbackFinished = true
+                if case .playing(let seq) = self.state, self.currentInputIndex >= seq.notes.count {
+                    self.handleSequenceCompleted(sequence: seq, settings: settings)
+                } else if case .playing(let seq) = self.state {
+                    self.state = .awaitingInput(sequence: seq, expectedIndex: self.currentInputIndex)
                 }
             }
         }
@@ -147,18 +254,7 @@ final class PracticeEngine: ObservableObject {
             return
         }
 
-        lastCorrectExpected = nil
-        lastCorrectGuessed = nil
-
-        DispatchQueue.main.async { [weak self] in
-            self?.state = .playing(sequence)
-        }
-
-        playbackScheduler.play(sequence: sequence) { [weak self] in
-            DispatchQueue.main.async {
-                self?.state = .awaitingInput(sequence: sequence, expectedIndex: 0)
-            }
-        }
+        replayCurrentSequence(sequence: sequence, settings: activeSession?.settings)
     }
 
     private func persistAttempt(descriptor: AttemptMetadata, sequence: MelodySequence, noteIndex: Int) {

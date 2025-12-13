@@ -43,35 +43,25 @@ struct PracticeView: View {
             List {
                 Section("Playback") {
                     HStack {
-                        Text("BPM")
-                        Spacer()
-                        Text("\(model.settings.bpm)")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button("Play Question") {
-                        guard model.selectedOutputID != nil || model.availableOutputs.isEmpty == false else {
-                            showingMissingOutput = true
-                            return
+                        Button(model.currentSequence == nil ? "Start" : "Next Question") {
+                            guard model.selectedOutputID != nil || model.availableOutputs.isEmpty == false else {
+                                showingMissingOutput = true
+                                return
+                            }
+                            model.playQuestion()
                         }
-                        model.playQuestion()
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.isPlaying)
+
+                        Button("Replay") {
+                            model.replay()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.currentSequence == nil || model.isPlaying)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.isPlaying)
 
                     if let name = firstNoteName {
                         Text("First note: \(name)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button("Replay") {
-                        model.replay()
-                    }
-                    .disabled(model.currentSequence == nil || model.isPlaying)
-
-                    if let seed = model.currentSequence?.seed {
-                        Text("Seed: \(seed)")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -82,16 +72,6 @@ struct PracticeView: View {
                     } else if let index = model.awaitingNoteIndex {
                         Text("Awaiting note \(index + 1) of \(model.currentSequence?.notes.count ?? 0)")
                             .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Text("Keys down")
-                        Circle()
-                            .fill(model.heldNotesCount > 0 ? Color.green : Color.gray.opacity(0.4))
-                            .frame(width: 12, height: 12)
-                        Text("\(model.heldNotesCount)")
-                            .foregroundStyle(.secondary)
-                            .font(.footnote)
                     }
 
                     if let sequence = model.currentSequence {
@@ -115,6 +95,17 @@ struct PracticeView: View {
                         Text("Bluetooth MIDI…").tag(OutputChoice.bluetooth)
                     }
                     .pickerStyle(.menu)
+                    
+                    HStack {
+                        Text("Keys down")
+                        Circle()
+                            .fill(model.heldNotesCount > 0 ? Color.green : Color.gray.opacity(0.4))
+                            .frame(width: 12, height: 12)
+                        Text("\(model.heldNotesCount)")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    }
+                    
                 }
             }
             .navigationTitle("Practice")

@@ -100,21 +100,21 @@ final class StatsRepositoryTests: XCTestCase {
 
         let degreeBuckets = try statsRepo.mistakeRateByDegree(filter: .allKeys)
         let degree1 = degreeBuckets.first { $0.label == "Degree 1" }
-        XCTAssertEqual(degree1?.rate, 0.0)
+        XCTAssertEqual(degree1?.rate ?? -1, 0.0)
 
         let degree3 = degreeBuckets.first { $0.label == "Degree 3" }
-        XCTAssertEqual(degree3?.rate, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(degree3?.rate ?? -1, 0.5, accuracy: 0.0001)
         XCTAssertEqual(degree3?.total, 2)
 
         let intervalBuckets = try statsRepo.mistakeRateByInterval(filter: .allKeys)
         let startBucket = intervalBuckets.first { $0.label == "Start" }
-        XCTAssertEqual(startBucket?.rate, 0.0)
+        XCTAssertEqual(startBucket?.rate ?? -1, 0.0)
 
         let intervalBucket = intervalBuckets.first { $0.label == "4" }
-        XCTAssertEqual(intervalBucket?.rate, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(intervalBucket?.rate ?? -1, 0.5, accuracy: 0.0001)
 
         let noteIndexBuckets = try statsRepo.mistakeRateByNoteIndex(filter: .allKeys)
         let note1Bucket = noteIndexBuckets.first { $0.label == "Note 2" }
-        XCTAssertEqual(note1Bucket?.rate, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(note1Bucket?.rate ?? -1, 0.5, accuracy: 0.0001)
     }
 }
