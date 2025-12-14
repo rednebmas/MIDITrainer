@@ -32,10 +32,14 @@ struct NoteOrbsContainerView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "music.note")
                                 .font(.subheadline)
+                                .fontWeight(.bold)
                                 .foregroundStyle(.secondary)
-                            Text("First note: \(name)")
+                            Text("First note:")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                            Text(name)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
                         }
                     }
 

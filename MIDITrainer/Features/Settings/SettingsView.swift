@@ -61,8 +61,8 @@ struct SettingsView: View {
                         }
                     }
 
-                    if draft.melodySourceType == .realMelodies {
-                        Text("Uses real melody phrases from pop songs")
+                    if let description = melodySourceDescription {
+                        Text(description)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -199,6 +199,17 @@ struct SettingsView: View {
             return "Length: \(draft.melodyLengthMin) notes"
         } else {
             return "Length: \(draft.melodyLengthMin)-\(draft.melodyLengthMax) notes"
+        }
+    }
+
+    private var melodySourceDescription: String? {
+        switch draft.melodySourceType {
+        case .random:
+            return nil
+        case .pop909:
+            return "909 pop songs from the POP909 dataset"
+        case .billboard:
+            return "Billboard Year-End #1-5 hits, 1950-2022"
         }
     }
 

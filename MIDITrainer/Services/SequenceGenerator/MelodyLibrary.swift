@@ -2,28 +2,55 @@ import Foundation
 
 /// Loads and provides access to bundled melody phrases.
 final class MelodyLibrary {
-    /// Shared instance using the bundled phrase library.
-    static let shared: MelodyLibrary = {
-        guard let url = Bundle.main.url(forResource: "melody_phrases", withExtension: "json") else {
-            print("Warning: melody_phrases.json not found in bundle")
-            return MelodyLibrary(library: MelodyPhraseLibrary())
-        }
+    /// POP909 pop songs library
+    static let pop909: MelodyPhraseLibrary = {
+        loadLibrary(named: "melody_phrases", description: "POP909")
+    }()
 
-        do {
-            let data = try Data(contentsOf: url)
-            let library = try MelodyLibrary.decode(data)
-            print("Loaded \(library.count) melody phrases")
-            return MelodyLibrary(library: library)
-        } catch {
-            print("Error loading melody phrases: \(error)")
-            return MelodyLibrary(library: MelodyPhraseLibrary())
-        }
+    /// Billboard hits library
+    static let billboard: MelodyPhraseLibrary = {
+        loadLibrary(named: "billboard_phrases", description: "Billboard")
+    }()
+
+    /// Legacy shared instance (uses POP909 for backwards compatibility)
+    static let shared: MelodyLibrary = {
+        MelodyLibrary(library: pop909)
     }()
 
     let library: MelodyPhraseLibrary
 
     init(library: MelodyPhraseLibrary) {
         self.library = library
+    }
+
+    /// Loads a phrase library from a bundled JSON file.
+    private static func loadLibrary(named name: String, description: String) -> MelodyPhraseLibrary {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "json") else {
+            print("Warning: \(name).json not found in bundle")
+            return MelodyPhraseLibrary()
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let library = try decode(data)
+            print("Loaded \(library.count) \(description) melody phrases")
+            return library
+        } catch {
+            print("Error loading \(description) phrases: \(error)")
+            return MelodyPhraseLibrary()
+        }
+    }
+
+    /// Returns the library for a given source type.
+    static func library(for sourceType: MelodySourceType) -> MelodyPhraseLibrary {
+        switch sourceType {
+        case .random:
+            return MelodyPhraseLibrary() // Empty, won't be used
+        case .pop909:
+            return pop909
+        case .billboard:
+            return billboard
+        }
     }
 
     /// Decodes a phrase library from JSON data.

@@ -80,11 +80,9 @@ struct RhythmLibrary {
 
 struct SequenceGenerator {
     private let rhythmLibrary: RhythmLibrary
-    private let melodyLibrary: MelodyPhraseLibrary
 
-    init(rhythmLibrary: RhythmLibrary = .default, melodyLibrary: MelodyPhraseLibrary? = nil) {
+    init(rhythmLibrary: RhythmLibrary = .default) {
         self.rhythmLibrary = rhythmLibrary
-        self.melodyLibrary = melodyLibrary ?? MelodyLibrary.shared.library
     }
 
     func generate(settings: PracticeSettingsSnapshot, seed: UInt64? = nil) -> MelodySequence {
@@ -100,8 +98,9 @@ struct SequenceGenerator {
             switch settings.melodySourceType {
             case .random:
                 return RandomMelodySource()
-            case .realMelodies:
-                return RealMelodySource(library: melodyLibrary)
+            case .pop909, .billboard:
+                let library = MelodyLibrary.library(for: settings.melodySourceType)
+                return RealMelodySource(library: library)
             }
         }()
 

@@ -71,7 +71,7 @@ struct PracticeView: View {
                         type: feedbackType(for: feedback),
                         isVisible: true
                     )
-                    .offset(y: -80)
+                    .offset(y: -120)
                 }
             }
 

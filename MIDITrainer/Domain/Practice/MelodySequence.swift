@@ -69,6 +69,13 @@ struct MelodySequence: Equatable {
             let number = sourceId.replacingOccurrences(of: "pop909_", with: "")
             return "POP909 #\(number)"
         }
+        // Convert "billboard_1985_Song Name" to "Billboard 1985: Song Name"
+        if sourceId.hasPrefix("billboard_") {
+            let parts = sourceId.replacingOccurrences(of: "billboard_", with: "").split(separator: "_", maxSplits: 1)
+            if parts.count == 2 {
+                return "Billboard \(parts[0]): \(parts[1])"
+            }
+        }
         return sourceId
     }
 }
