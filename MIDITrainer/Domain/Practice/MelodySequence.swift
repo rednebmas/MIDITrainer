@@ -58,11 +58,23 @@ struct MelodySequence: Equatable {
     let seed: UInt64?
     /// Source identifier for real melodies (e.g., "pop909_001")
     let sourceId: String?
+    /// Human-readable source title (e.g., "Art Pepper - Anthropology")
+    let sourceTitle: String?
+    /// Chord events for accompaniment (optional, from sources like Weimar Jazz)
+    let chords: [PhraseChordEvent]?
 
     var length: Int { notes.count }
 
+    /// Whether this sequence has chord accompaniment data
+    var hasChords: Bool { chords != nil && !chords!.isEmpty }
+
     /// Human-readable source name for display
     var sourceName: String? {
+        // Use provided title if available (e.g., from Weimar Jazz metadata)
+        if let sourceTitle = sourceTitle {
+            return sourceTitle
+        }
+
         guard let sourceId = sourceId else { return nil }
         // Convert "pop909_001" to "POP909 #001"
         if sourceId.hasPrefix("pop909_") {

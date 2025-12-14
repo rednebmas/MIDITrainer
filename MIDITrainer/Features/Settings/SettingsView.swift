@@ -94,6 +94,30 @@ struct SettingsView: View {
                     Stepper("BPM: \(draft.bpm)", value: $draft.bpm, in: 40...200)
                 }
 
+                // Show chord accompaniment settings when using a source with chords
+                if draft.melodySourceType.hasChords {
+                    Section("Chord Accompaniment") {
+                        Toggle("Play chords", isOn: $settingsStore.chordAccompanimentEnabled)
+                        Toggle("Show chord symbols", isOn: $settingsStore.showChordSymbols)
+
+                        if settingsStore.chordAccompanimentEnabled {
+                            Toggle("Loop during input", isOn: $settingsStore.chordLoopDuringInput)
+
+                            Text(settingsStore.chordLoopDuringInput
+                                ? "Chords will loop while you play back the melody"
+                                : "Chords only play during initial melody playback")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Picker("Voicing", selection: $settingsStore.chordVoicingStyle) {
+                                ForEach(ChordVoicingStyle.allCases, id: \.self) { style in
+                                    Text(style.displayName).tag(style)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Section("Octaves") {
                     ForEach(allOctaves, id: \.self) { octave in
                         Toggle("Octave \(octave)", isOn: Binding(
@@ -217,29 +241,43 @@ struct SettingsView: View {
         switch draft.melodySourceType {
         case .random:
             return nil
-        case .pop909, .billboard:
-            let count = matchingMelodyCount
-            let source = draft.melodySourceType == .pop909
-                ? "909 pop songs from the POP909 dataset"
-                : "Billboard Year-End #1-5 hits, 1950-2022"
-            return "\(count) matching melodies from \(source)"
+        case .pop909:
+            return "\(matchingMelodyCount) matching melodies from 909 pop songs from the POP909 dataset"
+        case .billboard:
+            return "\(matchingMelodyCount) matching melodies from Billboard Year-End #1-5 hits, 1950-2022"
+        case .weimarJazz:
+            return "\(matchingMelodyCount) matching melodies from 456 jazz solo transcriptions (Weimar Jazz Database)"
         }
     }
 
     private var matchingMelodyCount: Int {
         guard draft.melodySourceType.isRealMelody else { return 0 }
 
-        let library = MelodyLibrary.library(for: draft.melodySourceType)
-        let source = RealMelodySource(library: library)
         let scale = Scale(key: draft.key, type: draft.scaleType)
         let allowedDegrees = ScaleDegree.allCases.filter { !draft.excludedDegrees.contains($0) }
+        let lengthRange = draft.melodyLengthMin...draft.melodyLengthMax
 
-        return source.countMatchingPhrases(
-            lengthRange: draft.melodyLengthMin...draft.melodyLengthMax,
-            scale: scale,
-            allowedDegrees: allowedDegrees,
-            allowedOctaves: draft.allowedOctaves
-        )
+        switch draft.melodySourceType {
+        case .weimarJazz:
+            let source = AccompaniedMelodySource(library: MelodyLibrary.weimarJazz)
+            return source.countMatchingPhrases(
+                lengthRange: lengthRange,
+                scale: scale,
+                allowedDegrees: allowedDegrees,
+                allowedOctaves: draft.allowedOctaves
+            )
+        case .pop909, .billboard:
+            let library = MelodyLibrary.library(for: draft.melodySourceType)
+            let source = RealMelodySource(library: library)
+            return source.countMatchingPhrases(
+                lengthRange: lengthRange,
+                scale: scale,
+                allowedDegrees: allowedDegrees,
+                allowedOctaves: draft.allowedOctaves
+            )
+        case .random:
+            return 0
+        }
     }
 
     private func label(for mode: FeedbackMode) -> String {

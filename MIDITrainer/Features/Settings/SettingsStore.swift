@@ -58,6 +58,26 @@ final class SettingsStore: ObservableObject {
     @Published var weaknessMatchExactSettings: Bool {
         didSet { defaults.set(weaknessMatchExactSettings, forKey: weaknessMatchExactSettingsKey) }
     }
+    /// Whether to play chord accompaniment with jazz melodies
+    @Published var chordAccompanimentEnabled: Bool {
+        didSet { defaults.set(chordAccompanimentEnabled, forKey: chordAccompanimentEnabledKey) }
+    }
+    /// Whether chords should loop during user input phase (vs only playing during initial playback)
+    @Published var chordLoopDuringInput: Bool {
+        didSet { defaults.set(chordLoopDuringInput, forKey: chordLoopDuringInputKey) }
+    }
+    /// Chord voicing style
+    @Published var chordVoicingStyle: ChordVoicingStyle {
+        didSet { defaults.set(chordVoicingStyle.rawValue, forKey: chordVoicingStyleKey) }
+    }
+    /// Whether to show chord symbols on the practice screen
+    @Published var showChordSymbols: Bool {
+        didSet { defaults.set(showChordSymbols, forKey: showChordSymbolsKey) }
+    }
+    /// Chord volume as a ratio of melody volume (0.0 to 1.0)
+    @Published var chordVolumeRatio: Double {
+        didSet { defaults.set(chordVolumeRatio, forKey: chordVolumeRatioKey) }
+    }
 
     private let defaults: UserDefaults
     private let key = "com.sambender.miditrainer.settings"
@@ -73,6 +93,11 @@ final class SettingsStore: ObservableObject {
     private let useOnScreenKeyboardKey = "com.sambender.miditrainer.useOnScreenKeyboard"
     private let midiOutputVolumeKey = "com.sambender.miditrainer.midiOutputVolume"
     private let weaknessMatchExactSettingsKey = "com.sambender.miditrainer.weaknessMatchExactSettings"
+    private let chordAccompanimentEnabledKey = "com.sambender.miditrainer.chordAccompanimentEnabled"
+    private let chordLoopDuringInputKey = "com.sambender.miditrainer.chordLoopDuringInput"
+    private let chordVoicingStyleKey = "com.sambender.miditrainer.chordVoicingStyle"
+    private let showChordSymbolsKey = "com.sambender.miditrainer.showChordSymbols"
+    private let chordVolumeRatioKey = "com.sambender.miditrainer.chordVolumeRatio"
 
     private var todayDateString: String {
         let formatter = DateFormatter()
@@ -100,8 +125,18 @@ final class SettingsStore: ObservableObject {
         self.dailyGoal = defaults.object(forKey: dailyGoalKey) as? Int ?? 30
         self.currentStreak = defaults.object(forKey: currentStreakKey) as? Int ?? 0
         self.useOnScreenKeyboard = defaults.object(forKey: useOnScreenKeyboardKey) as? Bool ?? false
-        self.midiOutputVolume = defaults.object(forKey: midiOutputVolumeKey) as? Double ?? 0.75
+        self.midiOutputVolume = defaults.object(forKey: midiOutputVolumeKey) as? Double ?? 0.5
         self.weaknessMatchExactSettings = defaults.object(forKey: weaknessMatchExactSettingsKey) as? Bool ?? false
+        self.chordAccompanimentEnabled = defaults.object(forKey: chordAccompanimentEnabledKey) as? Bool ?? true
+        self.chordLoopDuringInput = defaults.object(forKey: chordLoopDuringInputKey) as? Bool ?? false
+        if let styleString = defaults.string(forKey: chordVoicingStyleKey),
+           let style = ChordVoicingStyle(rawValue: styleString) {
+            self.chordVoicingStyle = style
+        } else {
+            self.chordVoicingStyle = .shell
+        }
+        self.showChordSymbols = defaults.object(forKey: showChordSymbolsKey) as? Bool ?? true
+        self.chordVolumeRatio = defaults.object(forKey: chordVolumeRatioKey) as? Double ?? 0.5
 
         // Check if it's a new day and reset daily count if needed
         let formatter = DateFormatter()

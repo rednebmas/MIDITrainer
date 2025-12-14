@@ -7,6 +7,10 @@ struct AdvancedSettingsView: View {
         Int(settingsStore.midiOutputVolume * 100)
     }
 
+    private var chordVolumePercentage: Int {
+        Int(settingsStore.chordVolumeRatio * 100)
+    }
+
     var body: some View {
         Form {
             Section {
@@ -25,10 +29,26 @@ struct AdvancedSettingsView: View {
                         step: 0.05
                     )
                 }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Chord Volume")
+                        Spacer()
+                        Text("\(chordVolumePercentage)%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+
+                    Slider(
+                        value: $settingsStore.chordVolumeRatio,
+                        in: 0...1,
+                        step: 0.05
+                    )
+                }
             } header: {
                 Text("Audio")
             } footer: {
-                Text("Controls the volume of MIDI notes sent to your instrument and the on-screen keyboard samples.")
+                Text("MIDI Output Volume controls overall volume. Chord Volume is relative to melody notes.")
             }
         }
         .navigationTitle("Advanced")

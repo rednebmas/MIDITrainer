@@ -6,8 +6,26 @@ struct NoteOrbsContainerView: View {
     let errorIndex: Int?
     let firstNoteName: String?
     let sourceName: String?
+    let showChordSymbols: Bool
 
     @SwiftUI.State private var appearingOrbs: Set<Int> = []
+
+    /// Returns a formatted string of all chord symbols for display
+    private var chordSymbolsText: String? {
+        guard showChordSymbols,
+              let chords = sequence?.chords,
+              !chords.isEmpty else { return nil }
+        // Show unique chord symbols in order of appearance
+        var seen = Set<String>()
+        var result: [String] = []
+        for chord in chords {
+            if !seen.contains(chord.chord) {
+                seen.insert(chord.chord)
+                result.append(chord.chord)
+            }
+        }
+        return result.joined(separator: " → ")
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -48,6 +66,17 @@ struct NoteOrbsContainerView: View {
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
                             Text(source)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+
+                    if let chords = chordSymbolsText {
+                        HStack(spacing: 6) {
+                            Image(systemName: "pianokeys")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            Text(chords)
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
                         }
@@ -108,6 +137,7 @@ struct NoteOrbsContainerView: View {
         awaitingIndex: nil,
         errorIndex: nil,
         firstNoteName: nil,
-        sourceName: nil
+        sourceName: nil,
+        showChordSymbols: true
     )
 }

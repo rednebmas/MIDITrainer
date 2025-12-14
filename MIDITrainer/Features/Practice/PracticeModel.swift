@@ -43,6 +43,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var useOnScreenKeyboard: Bool = false
     @Published private(set) var schedulerMode: SchedulerMode = .spacedMistakes
     @Published private(set) var weaknessDebugEntries: [WeaknessEntry] = []
+    @Published private(set) var showChordSymbols: Bool = true
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -109,14 +110,33 @@ final class PracticeModel: ObservableObject {
             attemptRepository: attemptRepo,
             feedbackSettings: { settingsStore.feedback },
             replayHotkeyEnabled: { settingsStore.replayHotkeyEnabled },
+            chordAccompanimentEnabled: { settingsStore.chordAccompanimentEnabled },
+            chordLoopDuringInput: { settingsStore.chordLoopDuringInput },
+            chordVoicingStyle: { settingsStore.chordVoicingStyle },
+            chordVolumeRatio: { settingsStore.chordVolumeRatio },
+            currentSettingsProvider: { settingsStore.settings },
             schedulingCoordinator: schedulingCoordinator
         )
         settingsStore.$settings
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newSettings in
-                self?.settings = newSettings
-                self?.refreshFirstTryAccuracy()
-                self?.refreshWeaknessEntries()
+                guard let self else { return }
+                let oldSettings = self.settings
+                self.settings = newSettings
+
+                // If melody source changed, clear the mistake queue and start fresh
+                if oldSettings.melodySourceType != newSettings.melodySourceType {
+                    self.schedulingCoordinator.clearQueue()
+
+                    if case .active = self.engine.state {
+                        self.playQuestion()
+                    } else if case .completed = self.engine.state {
+                        self.playQuestion()
+                    }
+                }
+
+                self.refreshFirstTryAccuracy()
+                self.refreshWeaknessEntries()
             }
             .store(in: &cancellables)
 
@@ -125,6 +145,9 @@ final class PracticeModel: ObservableObject {
         if useOnScreenKeyboard {
             selectedOutputName = "On-Screen Keyboard"
         }
+
+        // Initialize chord display state
+        showChordSymbols = settingsStore.showChordSymbols
 
         bind()
         bindStats()
@@ -147,6 +170,11 @@ final class PracticeModel: ObservableObject {
         settingsStore.$dailyGoal
             .receive(on: DispatchQueue.main)
             .assign(to: \.dailyGoal, on: self)
+            .store(in: &cancellables)
+
+        settingsStore.$showChordSymbols
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.showChordSymbols, on: self)
             .store(in: &cancellables)
     }
 

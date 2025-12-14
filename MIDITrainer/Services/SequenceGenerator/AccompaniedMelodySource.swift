@@ -1,10 +1,10 @@
 import Foundation
 
-/// Generates melodies by selecting real phrases from a library and transposing them.
-struct RealMelodySource: MelodySource {
-    private let library: MelodyPhraseLibrary
+/// Generates melodies with chord accompaniment data from an AccompaniedPhraseLibrary.
+struct AccompaniedMelodySource: MelodySource {
+    private let library: AccompaniedPhraseLibrary
 
-    init(library: MelodyPhraseLibrary) {
+    init(library: AccompaniedPhraseLibrary) {
         self.library = library
     }
 
@@ -34,7 +34,8 @@ struct RealMelodySource: MelodySource {
 
         // Try each phrase until we find one that works with allowed degrees
         for phraseIndex in shuffledIndices {
-            let phrase = matchingPhrases[phraseIndex]
+            let accompaniedPhrase = matchingPhrases[phraseIndex]
+            let phrase = accompaniedPhrase.melody
 
             // Try each allowed starting degree
             var startingDegrees = allowedDegrees
@@ -50,15 +51,19 @@ struct RealMelodySource: MelodySource {
                     allowedOctaves: allowedOctaves,
                     rng: &rng
                 ) {
+                    // Build source title from metadata (e.g., "Art Pepper - Anthropology")
+                    let sourceTitle = buildSourceTitle(from: accompaniedPhrase.metadata)
                     return MelodyGenerationResult(
                         notes: mappedNotes,
-                        sourceId: phrase.sourceId
+                        sourceId: phrase.sourceId,
+                        sourceTitle: sourceTitle,
+                        chords: accompaniedPhrase.chords
                     )
                 }
             }
         }
 
-        // No phrase fits the constraints, fall back to random
+        // No phrase fits the constraints, fall back to random (no chords)
         return RandomMelodySource().generateMelody(
             lengthRange: lengthRange,
             scale: scale,
@@ -169,20 +174,16 @@ struct RealMelodySource: MelodySource {
         targetSemitone: Int,
         scaleOffsets: [Int]
     ) -> ScaleDegree? {
-        // Check if target matches the octave (degree viii)
         if targetSemitone == 0 {
-            // Could be degree i or viii depending on context, but for matching we use i
             return .i
         }
 
-        // Check each scale degree
         for (index, offset) in scaleOffsets.enumerated() {
             if offset == targetSemitone && index < ScaleDegree.allCases.count {
                 return ScaleDegree.allCases[index]
             }
         }
 
-        // No exact match - this is a chromatic note
         return nil
     }
 
@@ -191,6 +192,26 @@ struct RealMelodySource: MelodySource {
             fatalError("randomElement called with empty array")
         }
         return element
+    }
+
+    /// Builds a human-readable title from phrase metadata.
+    private func buildSourceTitle(from metadata: PhraseMetadata?) -> String? {
+        guard let metadata = metadata else { return nil }
+
+        var title: String?
+        if let performer = metadata.performer, let songTitle = metadata.title {
+            title = "\(performer) - \(songTitle)"
+        } else if let songTitle = metadata.title {
+            title = songTitle
+        } else if let performer = metadata.performer {
+            title = performer
+        }
+
+        // Append bar number if available
+        if let title = title, let startBar = metadata.startBar {
+            return "\(title) (bar \(startBar))"
+        }
+        return title
     }
 
     /// Counts how many phrases in the library can be mapped to the given scale with the specified constraints.
@@ -209,7 +230,8 @@ struct RealMelodySource: MelodySource {
         var dummyRng = SeededGenerator(seed: 0)
 
         var count = 0
-        for phrase in matchingPhrases {
+        for accompaniedPhrase in matchingPhrases {
+            let phrase = accompaniedPhrase.melody
             for startDegree in allowedDegrees {
                 if mapPhraseToScale(
                     phrase: phrase,

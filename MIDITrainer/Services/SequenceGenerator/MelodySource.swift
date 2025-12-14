@@ -4,10 +4,14 @@ import Foundation
 struct MelodyGenerationResult {
     let notes: [UInt8]
     let sourceId: String?
+    let sourceTitle: String?
+    let chords: [PhraseChordEvent]?
 
-    init(notes: [UInt8], sourceId: String? = nil) {
+    init(notes: [UInt8], sourceId: String? = nil, sourceTitle: String? = nil, chords: [PhraseChordEvent]? = nil) {
         self.notes = notes
         self.sourceId = sourceId
+        self.sourceTitle = sourceTitle
+        self.chords = chords
     }
 }
 
@@ -35,6 +39,7 @@ protocol MelodySource {
 enum MelodySourceType: String, CaseIterable, Codable {
     case billboard = "Billboard Hits"
     case pop909 = "Pop (POP909)"
+    case weimarJazz = "Jazz Solos (Weimar)"
     case random = "Random"
 
     var displayName: String { rawValue }
@@ -42,7 +47,15 @@ enum MelodySourceType: String, CaseIterable, Codable {
     var isRealMelody: Bool {
         switch self {
         case .random: return false
-        case .pop909, .billboard: return true
+        case .pop909, .billboard, .weimarJazz: return true
+        }
+    }
+
+    /// Whether this source has chord accompaniment data.
+    var hasChords: Bool {
+        switch self {
+        case .weimarJazz: return true
+        case .billboard, .pop909, .random: return false
         }
     }
 }

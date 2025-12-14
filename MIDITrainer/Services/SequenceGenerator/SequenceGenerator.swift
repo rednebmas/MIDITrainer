@@ -101,6 +101,9 @@ struct SequenceGenerator {
             case .pop909, .billboard:
                 let library = MelodyLibrary.library(for: settings.melodySourceType)
                 return RealMelodySource(library: library)
+            case .weimarJazz:
+                // Use AccompaniedMelodySource to include chord data
+                return AccompaniedMelodySource(library: MelodyLibrary.weimarJazz)
             }
         }()
 
@@ -133,7 +136,9 @@ struct SequenceGenerator {
             allowedOctaves: allowedOctaves,
             bpm: settings.bpm,
             seed: selectedSeed,
-            sourceId: result.sourceId
+            sourceId: result.sourceId,
+            sourceTitle: result.sourceTitle,
+            chords: result.chords
         )
     }
 

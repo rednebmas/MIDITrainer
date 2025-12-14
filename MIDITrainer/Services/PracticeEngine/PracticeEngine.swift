@@ -22,6 +22,11 @@ final class PracticeEngine: ObservableObject {
     private let attemptRepository: AttemptRepository
     private let feedbackSettings: () -> FeedbackSettings
     private let replayHotkeyEnabled: () -> Bool
+    private let chordAccompanimentEnabled: () -> Bool
+    private let chordLoopDuringInput: () -> Bool
+    private let chordVoicingStyle: () -> ChordVoicingStyle
+    private let chordVolumeRatio: () -> Double
+    private let currentSettingsProvider: () -> PracticeSettingsSnapshot
     private let schedulingCoordinator: SchedulingCoordinator?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -63,6 +68,11 @@ final class PracticeEngine: ObservableObject {
         attemptRepository: AttemptRepository,
         feedbackSettings: @escaping () -> FeedbackSettings,
         replayHotkeyEnabled: @escaping () -> Bool,
+        chordAccompanimentEnabled: @escaping () -> Bool = { true },
+        chordLoopDuringInput: @escaping () -> Bool = { false },
+        chordVoicingStyle: @escaping () -> ChordVoicingStyle = { .shell },
+        chordVolumeRatio: @escaping () -> Double = { 0.5 },
+        currentSettingsProvider: @escaping () -> PracticeSettingsSnapshot,
         schedulingCoordinator: SchedulingCoordinator? = nil
     ) {
         self.midiService = midiService
@@ -76,6 +86,11 @@ final class PracticeEngine: ObservableObject {
         self.attemptRepository = attemptRepository
         self.feedbackSettings = feedbackSettings
         self.replayHotkeyEnabled = replayHotkeyEnabled
+        self.chordAccompanimentEnabled = chordAccompanimentEnabled
+        self.chordLoopDuringInput = chordLoopDuringInput
+        self.chordVoicingStyle = chordVoicingStyle
+        self.chordVolumeRatio = chordVolumeRatio
+        self.currentSettingsProvider = currentSettingsProvider
         self.schedulingCoordinator = schedulingCoordinator
         bindMIDI()
     }
@@ -100,6 +115,9 @@ final class PracticeEngine: ObservableObject {
     
     private func startSequence(settings: PracticeSettingsSnapshot, seed: UInt64, mistakeId: Int64?) {
         do {
+            // Stop any existing chord loop before starting a new sequence
+            playbackScheduler.stopChordLoop()
+
             let session = try ensureSession(for: settings)
             let sequence = sequenceGenerator.generate(settings: settings, seed: seed)
             let ids = try sequenceRepository.insert(sequence: sequence, sessionId: session.id, settingsSnapshotId: session.settingsSnapshotId)
@@ -119,17 +137,7 @@ final class PracticeEngine: ObservableObject {
                 self?.state = .active(sequence: sequence, isPlayingBack: true)
             }
 
-            playbackScheduler.play(sequence: sequence) { [weak self] in
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    self.playbackFinished = true
-                    if case .active(let seq, _) = self.state, self.currentInputIndex >= seq.notes.count {
-                        self.handleSequenceCompleted(sequence: seq, settings: settings)
-                    } else if case .active(let seq, _) = self.state {
-                        self.state = .active(sequence: seq, isPlayingBack: false)
-                    }
-                }
-            }
+            playSequenceWithChords(sequence: sequence, settings: settings)
         } catch {
             // For now we silently fail; future milestone can surface errors to the UI.
         }
@@ -212,8 +220,11 @@ final class PracticeEngine: ObservableObject {
     }
     
     private func handleSequenceCompleted(sequence: MelodySequence, settings: PracticeSettingsSnapshot?) {
+        // Stop chord looping when sequence completes
+        playbackScheduler.stopChordLoop()
+
         state = .completed(sequence: sequence, hadErrors: hadErrorsInSequence)
-        
+
         // Notify the scheduler of the completion (only once per sequence, not on replays)
         if !hasRecordedCompletion, let seed = currentSeed, let settings = settings {
             hasRecordedCompletion = true
@@ -235,9 +246,9 @@ final class PracticeEngine: ObservableObject {
                     self.replayCurrentSequence(sequence: sequence, settings: settings)
                 } else {
                     self.feedbackService.playSequenceSuccess(for: sequence.key, settings: self.feedbackSettings())
-                    if let settings {
-                        self.playQuestion(settings: settings)
-                    }
+                    // Use fresh settings from provider to pick up any changes made during practice
+                    let freshSettings = self.currentSettingsProvider()
+                    self.playQuestion(settings: freshSettings)
                 }
             }
         }
@@ -251,6 +262,9 @@ final class PracticeEngine: ObservableObject {
     }
     
     private func replayCurrentSequence(sequence: MelodySequence, settings: PracticeSettingsSnapshot?) {
+        // Stop any existing chord loop before replay
+        playbackScheduler.stopChordLoop()
+
         lastCorrectExpected = nil
         lastCorrectGuessed = nil
         currentInputIndex = 0
@@ -260,17 +274,7 @@ final class PracticeEngine: ObservableObject {
 
         state = .active(sequence: sequence, isPlayingBack: true)
 
-        playbackScheduler.play(sequence: sequence) { [weak self] in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.playbackFinished = true
-                if case .active(let seq, _) = self.state, self.currentInputIndex >= seq.notes.count {
-                    self.handleSequenceCompleted(sequence: seq, settings: settings)
-                } else if case .active(let seq, _) = self.state {
-                    self.state = .active(sequence: seq, isPlayingBack: false)
-                }
-            }
-        }
+        playSequenceWithChords(sequence: sequence, settings: settings)
     }
 
     func replay() {
@@ -283,6 +287,59 @@ final class PracticeEngine: ObservableObject {
         }
 
         replayCurrentSequence(sequence: sequence, settings: activeSession?.settings)
+    }
+
+    /// Configures and starts playback of a sequence with optional chord accompaniment.
+    private func playSequenceWithChords(sequence: MelodySequence, settings: PracticeSettingsSnapshot?) {
+        playbackScheduler.chordVoicingStyle = chordVoicingStyle()
+        playbackScheduler.chordVolumeMultiplier = chordVolumeRatio()
+        let chordsToPlay = chordAccompanimentEnabled() ? sequence.chords : nil
+
+        playbackScheduler.play(sequence: sequence, chords: chordsToPlay) { [weak self] in
+            self?.handlePlaybackFinished(settings: settings)
+        }
+    }
+
+    /// Called when melody playback finishes - handles transition to input phase or completion.
+    private func handlePlaybackFinished(settings: PracticeSettingsSnapshot?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.playbackFinished = true
+
+            guard case .active(let sequence, _) = self.state else { return }
+
+            if self.currentInputIndex >= sequence.notes.count {
+                // User already finished input during playback
+                self.handleSequenceCompleted(sequence: sequence, settings: settings)
+            } else {
+                // Transition to input phase
+                self.state = .active(sequence: sequence, isPlayingBack: false)
+                if let settings {
+                    self.startChordLoopIfNeeded(sequence: sequence, settings: settings)
+                }
+            }
+        }
+    }
+
+    /// Starts chord looping if the setting is enabled and the sequence has chords
+    private func startChordLoopIfNeeded(sequence: MelodySequence, settings: PracticeSettingsSnapshot) {
+        guard chordLoopDuringInput(),
+              chordAccompanimentEnabled(),
+              let chords = sequence.chords,
+              !chords.isEmpty else {
+            return
+        }
+
+        // Calculate loop duration based on the melody duration
+        let secondsPerBeat = 60.0 / Double(settings.bpm)
+        let loopDuration = sequence.notes.map { $0.startBeat + $0.durationBeats }.max() ?? 0
+        let loopDurationSeconds = loopDuration * secondsPerBeat
+
+        playbackScheduler.startChordLoop(
+            chords: chords,
+            bpm: settings.bpm,
+            loopDuration: loopDurationSeconds
+        )
     }
 
     private func persistAttempt(descriptor: AttemptMetadata, sequence: MelodySequence, noteIndex: Int) {
