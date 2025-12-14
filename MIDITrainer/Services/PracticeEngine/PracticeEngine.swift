@@ -20,6 +20,7 @@ final class PracticeEngine: ObservableObject {
     private let sessionRepository: SessionRepository
     private let sequenceRepository: SequenceRepository
     private let attemptRepository: AttemptRepository
+    private let statsRepository: StatsRepository?
     private let feedbackSettings: () -> FeedbackSettings
     private let replayHotkeyEnabled: () -> Bool
     private let chordAccompanimentEnabled: () -> Bool
@@ -28,6 +29,7 @@ final class PracticeEngine: ObservableObject {
     private let chordVolumeRatio: () -> Double
     private let melodyMIDIChannel: () -> Int
     private let chordMIDIChannel: () -> Int
+    private let weightIntervalsByErrorRate: () -> Bool
     private let currentSettingsProvider: () -> PracticeSettingsSnapshot
     private let schedulingCoordinator: SchedulingCoordinator?
     private var cancellables: Set<AnyCancellable> = []
@@ -68,6 +70,7 @@ final class PracticeEngine: ObservableObject {
         sessionRepository: SessionRepository,
         sequenceRepository: SequenceRepository,
         attemptRepository: AttemptRepository,
+        statsRepository: StatsRepository? = nil,
         feedbackSettings: @escaping () -> FeedbackSettings,
         replayHotkeyEnabled: @escaping () -> Bool,
         chordAccompanimentEnabled: @escaping () -> Bool = { true },
@@ -76,6 +79,7 @@ final class PracticeEngine: ObservableObject {
         chordVolumeRatio: @escaping () -> Double = { 0.5 },
         melodyMIDIChannel: @escaping () -> Int = { 0 },
         chordMIDIChannel: @escaping () -> Int = { 0 },
+        weightIntervalsByErrorRate: @escaping () -> Bool = { false },
         currentSettingsProvider: @escaping () -> PracticeSettingsSnapshot,
         schedulingCoordinator: SchedulingCoordinator? = nil
     ) {
@@ -88,6 +92,7 @@ final class PracticeEngine: ObservableObject {
         self.sessionRepository = sessionRepository
         self.sequenceRepository = sequenceRepository
         self.attemptRepository = attemptRepository
+        self.statsRepository = statsRepository
         self.feedbackSettings = feedbackSettings
         self.replayHotkeyEnabled = replayHotkeyEnabled
         self.chordAccompanimentEnabled = chordAccompanimentEnabled
@@ -96,6 +101,7 @@ final class PracticeEngine: ObservableObject {
         self.chordVolumeRatio = chordVolumeRatio
         self.melodyMIDIChannel = melodyMIDIChannel
         self.chordMIDIChannel = chordMIDIChannel
+        self.weightIntervalsByErrorRate = weightIntervalsByErrorRate
         self.currentSettingsProvider = currentSettingsProvider
         self.schedulingCoordinator = schedulingCoordinator
         bindMIDI()
@@ -125,7 +131,17 @@ final class PracticeEngine: ObservableObject {
             playbackScheduler.stopChordLoop()
 
             let session = try ensureSession(for: settings)
-            let sequence = sequenceGenerator.generate(settings: settings, seed: seed)
+
+            // Fetch interval error rates if weighting is enabled and melody source is random
+            let intervalErrorRates: [StatBucket]?
+            if weightIntervalsByErrorRate(), settings.melodySourceType == .random, let statsRepo = statsRepository {
+                let filter = StatsFilter.key(settings.key, settings.scaleType)
+                intervalErrorRates = try? statsRepo.mistakeRateByInterval(filter: filter)
+            } else {
+                intervalErrorRates = nil
+            }
+
+            let sequence = sequenceGenerator.generate(settings: settings, seed: seed, intervalErrorRates: intervalErrorRates)
             let ids = try sequenceRepository.insert(sequence: sequence, sessionId: session.id, settingsSnapshotId: session.settingsSnapshotId)
             currentSequenceIDs = ids
             currentSeed = seed

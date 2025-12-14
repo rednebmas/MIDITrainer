@@ -55,6 +55,16 @@ struct SettingsView: View {
                         }
                     }
 
+                    if draft.melodySourceType == .random {
+                        Toggle("Weight by error rate", isOn: $settingsStore.weightIntervalsByErrorRate)
+
+                        Text(settingsStore.weightIntervalsByErrorRate
+                            ? "Favors intervals you struggle with most"
+                            : "Equal probability for all intervals")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         Text(lengthRangeLabel)
                         HStack {

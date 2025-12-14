@@ -30,7 +30,8 @@ struct StatsView: View {
                 StatsChartSection(
                     title: "Mistake rate by interval",
                     buckets: model.intervalBuckets,
-                    xLabel: "Interval"
+                    xLabel: "Interval",
+                    showCounts: true
                 )
 
                 StatsChartSection(
@@ -126,6 +127,7 @@ private struct StatsChartSection: View {
     let title: String
     let buckets: [StatBucket]
     let xLabel: String
+    var showCounts: Bool = false
 
     var body: some View {
         Section(title) {
@@ -138,6 +140,13 @@ private struct StatsChartSection: View {
                         x: .value(xLabel, bucket.label),
                         y: .value("Mistake rate", bucket.rate)
                     )
+                    .annotation(position: .top, alignment: .center) {
+                        if showCounts && bucket.total > 0 {
+                            Text("\(bucket.total)")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .frame(height: 220)
             }

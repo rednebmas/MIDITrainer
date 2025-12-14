@@ -84,6 +84,10 @@ final class SettingsStore: ObservableObject {
     @Published var chordMIDIChannel: Int {
         didSet { defaults.set(chordMIDIChannel, forKey: chordMIDIChannelKey) }
     }
+    /// Whether to weight random melody generation toward intervals with high error rates
+    @Published var weightIntervalsByErrorRate: Bool {
+        didSet { defaults.set(weightIntervalsByErrorRate, forKey: weightIntervalsByErrorRateKey) }
+    }
 
     private let defaults: UserDefaults
     private let key = "com.sambender.miditrainer.settings"
@@ -106,6 +110,7 @@ final class SettingsStore: ObservableObject {
     private let chordVolumeRatioKey = "com.sambender.miditrainer.chordVolumeRatio"
     private let melodyMIDIChannelKey = "com.sambender.miditrainer.melodyMIDIChannel"
     private let chordMIDIChannelKey = "com.sambender.miditrainer.chordMIDIChannel"
+    private let weightIntervalsByErrorRateKey = "com.sambender.miditrainer.weightIntervalsByErrorRate"
 
     private var todayDateString: String {
         let formatter = DateFormatter()
@@ -147,6 +152,7 @@ final class SettingsStore: ObservableObject {
         self.chordVolumeRatio = defaults.object(forKey: chordVolumeRatioKey) as? Double ?? 0.5
         self.melodyMIDIChannel = defaults.object(forKey: melodyMIDIChannelKey) as? Int ?? 0
         self.chordMIDIChannel = defaults.object(forKey: chordMIDIChannelKey) as? Int ?? 0
+        self.weightIntervalsByErrorRate = defaults.object(forKey: weightIntervalsByErrorRateKey) as? Bool ?? false
 
         // Check if it's a new day and reset daily count if needed
         let formatter = DateFormatter()

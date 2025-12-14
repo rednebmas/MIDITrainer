@@ -85,7 +85,7 @@ struct SequenceGenerator {
         self.rhythmLibrary = rhythmLibrary
     }
 
-    func generate(settings: PracticeSettingsSnapshot, seed: UInt64? = nil) -> MelodySequence {
+    func generate(settings: PracticeSettingsSnapshot, seed: UInt64? = nil, intervalErrorRates: [StatBucket]? = nil) -> MelodySequence {
         let selectedSeed = seed ?? UInt64.random(in: .min ... .max)
         var rng = SeededGenerator(seed: selectedSeed)
 
@@ -97,6 +97,10 @@ struct SequenceGenerator {
         let melodySource: MelodySource = {
             switch settings.melodySourceType {
             case .random:
+                // Use interval-weighted source if error rates provided
+                if let errorRates = intervalErrorRates, !errorRates.isEmpty {
+                    return IntervalWeightedMelodySource(intervalErrorRates: errorRates)
+                }
                 return RandomMelodySource()
             case .pop909, .billboard:
                 let library = MelodyLibrary.library(for: settings.melodySourceType)

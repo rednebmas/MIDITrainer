@@ -108,6 +108,7 @@ final class PracticeModel: ObservableObject {
             sessionRepository: sessionRepo,
             sequenceRepository: sequenceRepo,
             attemptRepository: attemptRepo,
+            statsRepository: self.statsRepository,
             feedbackSettings: { settingsStore.feedback },
             replayHotkeyEnabled: { settingsStore.replayHotkeyEnabled },
             chordAccompanimentEnabled: { settingsStore.chordAccompanimentEnabled },
@@ -116,6 +117,7 @@ final class PracticeModel: ObservableObject {
             chordVolumeRatio: { settingsStore.chordVolumeRatio },
             melodyMIDIChannel: { settingsStore.melodyMIDIChannel },
             chordMIDIChannel: { settingsStore.chordMIDIChannel },
+            weightIntervalsByErrorRate: { settingsStore.weightIntervalsByErrorRate },
             currentSettingsProvider: { settingsStore.settings },
             schedulingCoordinator: schedulingCoordinator
         )
