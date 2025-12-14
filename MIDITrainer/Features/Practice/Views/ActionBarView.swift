@@ -6,6 +6,7 @@ struct ActionBarView: View {
     let midiDeviceName: String?
     let isMidiConnected: Bool
     let onAction: () -> Void
+    let onSkip: () -> Void
     let onMidiSettingsTap: () -> Void
 
     var body: some View {
@@ -37,35 +38,55 @@ struct ActionBarView: View {
             }
             .buttonStyle(.plain)
 
-            // Main Action Button
-            Button(action: onAction) {
-                HStack(spacing: 8) {
-                    if isPlaying {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: hasSequence ? "arrow.counterclockwise" : "play.fill")
-                            .font(.headline)
-                    }
+            // Main Action Button with Skip
+            HStack(spacing: 12) {
+                Button(action: onAction) {
+                    HStack(spacing: 8) {
+                        if isPlaying {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: hasSequence ? "arrow.counterclockwise" : "play.fill")
+                                .font(.headline)
+                        }
 
-                    Text(buttonTitle)
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                        Text(buttonTitle)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: 280)
+                    .frame(height: 54)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(buttonColor)
+                    )
+                    .foregroundStyle(.white)
                 }
-                .frame(maxWidth: 280)
-                .frame(height: 54)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(buttonColor)
-                )
-                .foregroundStyle(.white)
+                .buttonStyle(.plain)
+                .disabled(isPlaying)
+                .opacity(isPlaying ? 0.7 : 1)
+                .animation(.easeInOut(duration: 0.2), value: isPlaying)
+                .animation(.easeInOut(duration: 0.2), value: hasSequence)
+
+                // Skip button
+                if hasSequence && !isPlaying {
+                    Button(action: onSkip) {
+                        Image(systemName: "forward.fill")
+                            .font(.headline)
+                            .frame(width: 54, height: 54)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.secondary.opacity(0.3))
+                            )
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
-            .buttonStyle(.plain)
-            .disabled(isPlaying)
-            .opacity(isPlaying ? 0.7 : 1)
-            .animation(.easeInOut(duration: 0.2), value: isPlaying)
             .animation(.easeInOut(duration: 0.2), value: hasSequence)
+            .animation(.easeInOut(duration: 0.2), value: isPlaying)
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
@@ -102,6 +123,7 @@ struct ActionBarView: View {
             midiDeviceName: "Roland FP-30X",
             isMidiConnected: true,
             onAction: {},
+            onSkip: {},
             onMidiSettingsTap: {}
         )
 
@@ -111,6 +133,7 @@ struct ActionBarView: View {
             midiDeviceName: "Roland FP-30X",
             isMidiConnected: true,
             onAction: {},
+            onSkip: {},
             onMidiSettingsTap: {}
         )
 
@@ -120,6 +143,7 @@ struct ActionBarView: View {
             midiDeviceName: nil,
             isMidiConnected: false,
             onAction: {},
+            onSkip: {},
             onMidiSettingsTap: {}
         )
     }

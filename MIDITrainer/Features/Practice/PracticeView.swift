@@ -94,6 +94,7 @@ struct PracticeView: View {
                 midiDeviceName: model.selectedOutputName,
                 isMidiConnected: isMidiConnected,
                 onAction: handleAction,
+                onSkip: { model.skip() },
                 onMidiSettingsTap: { showingMIDISettings = true }
             )
             .padding(.bottom, 8)

@@ -50,6 +50,24 @@ struct AdvancedSettingsView: View {
             } footer: {
                 Text("MIDI Output Volume controls overall volume. Chord Volume is relative to melody notes.")
             }
+
+            Section {
+                Picker("Melody Channel", selection: $settingsStore.melodyMIDIChannel) {
+                    ForEach(0..<16, id: \.self) { channel in
+                        Text("\(channel + 1)").tag(channel)
+                    }
+                }
+
+                Picker("Chord Channel", selection: $settingsStore.chordMIDIChannel) {
+                    ForEach(0..<16, id: \.self) { channel in
+                        Text("\(channel + 1)").tag(channel)
+                    }
+                }
+            } header: {
+                Text("MIDI Channels")
+            } footer: {
+                Text("Set different channels to route melody and chords to separate sounds on your synthesizer.")
+            }
         }
         .navigationTitle("Advanced")
         .navigationBarTitleDisplayMode(.inline)

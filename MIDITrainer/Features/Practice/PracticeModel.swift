@@ -114,6 +114,8 @@ final class PracticeModel: ObservableObject {
             chordLoopDuringInput: { settingsStore.chordLoopDuringInput },
             chordVoicingStyle: { settingsStore.chordVoicingStyle },
             chordVolumeRatio: { settingsStore.chordVolumeRatio },
+            melodyMIDIChannel: { settingsStore.melodyMIDIChannel },
+            chordMIDIChannel: { settingsStore.chordMIDIChannel },
             currentSettingsProvider: { settingsStore.settings },
             schedulingCoordinator: schedulingCoordinator
         )
@@ -299,6 +301,10 @@ final class PracticeModel: ObservableObject {
     func replay() {
         isReplaying = true
         engine.replay()
+    }
+
+    func skip() {
+        playQuestion()
     }
 
     /// Attempts to auto-select the last used MIDI output if no output is currently selected

@@ -14,12 +14,15 @@ final class FeedbackService {
     private let midiService: MIDIService
     private let queue = DispatchQueue(label: "com.sambender.miditrainer.feedback")
 
+    var channel: Int = 0
+
     init(midiService: MIDIService) {
         self.midiService = midiService
     }
 
     func playSequenceSuccess(for key: Key, settings: FeedbackSettings) {
         guard settings.mode != .none else { return }
+        let feedbackChannel = channel
         queue.async { [weak self] in
             guard let self else { return }
             switch settings.mode {
@@ -27,24 +30,24 @@ final class FeedbackService {
                 return
             case .rootNote:
                 if let root = self.rootMidiNote(for: key) {
-                    self.send(note: root, chord: [root])
+                    self.send(note: root, chord: [root], channel: feedbackChannel)
                 }
             case .rootTriad:
                 if let triad = self.rootTriad(for: key) {
-                    self.send(note: triad.first ?? 0, chord: triad)
+                    self.send(note: triad.first ?? 0, chord: triad, channel: feedbackChannel)
                 }
             }
         }
     }
 
-    private func send(note: UInt8, chord: [UInt8]) {
+    private func send(note: UInt8, chord: [UInt8], channel: Int) {
         for midiNote in chord {
-            midiService.send(noteOn: midiNote, velocity: 90)
+            midiService.send(noteOn: midiNote, velocity: 90, channel: channel)
         }
         let releaseDelay = DispatchTime.now() + 0.4
         queue.asyncAfter(deadline: releaseDelay) { [weak self] in
             for midiNote in chord {
-                self?.midiService.send(noteOff: midiNote)
+                self?.midiService.send(noteOff: midiNote, channel: channel)
             }
         }
     }

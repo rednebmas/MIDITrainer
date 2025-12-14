@@ -15,7 +15,12 @@
       "WebFetch(domain:jazzomat.hfm-weimar.de)",
       "WebFetch(domain:mir.audiolabs.uni-erlangen.de)",
       "Bash(sqlite3:*)",
-      "Bash(unzip:*)"
+      "Bash(unzip:*)",
+      "WebFetch(domain:www.norduserforum.com)",
+      "WebFetch(domain:www.manua.ls)",
+      "WebFetch(domain:www.nordkeyboards.com)",
+      "WebFetch(domain:manualzz.com)",
+      "WebFetch(domain:manuals.plus)"
     ]
   }
 }

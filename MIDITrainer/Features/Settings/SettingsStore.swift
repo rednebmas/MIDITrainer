@@ -78,6 +78,12 @@ final class SettingsStore: ObservableObject {
     @Published var chordVolumeRatio: Double {
         didSet { defaults.set(chordVolumeRatio, forKey: chordVolumeRatioKey) }
     }
+    @Published var melodyMIDIChannel: Int {
+        didSet { defaults.set(melodyMIDIChannel, forKey: melodyMIDIChannelKey) }
+    }
+    @Published var chordMIDIChannel: Int {
+        didSet { defaults.set(chordMIDIChannel, forKey: chordMIDIChannelKey) }
+    }
 
     private let defaults: UserDefaults
     private let key = "com.sambender.miditrainer.settings"
@@ -98,6 +104,8 @@ final class SettingsStore: ObservableObject {
     private let chordVoicingStyleKey = "com.sambender.miditrainer.chordVoicingStyle"
     private let showChordSymbolsKey = "com.sambender.miditrainer.showChordSymbols"
     private let chordVolumeRatioKey = "com.sambender.miditrainer.chordVolumeRatio"
+    private let melodyMIDIChannelKey = "com.sambender.miditrainer.melodyMIDIChannel"
+    private let chordMIDIChannelKey = "com.sambender.miditrainer.chordMIDIChannel"
 
     private var todayDateString: String {
         let formatter = DateFormatter()
@@ -137,6 +145,8 @@ final class SettingsStore: ObservableObject {
         }
         self.showChordSymbols = defaults.object(forKey: showChordSymbolsKey) as? Bool ?? true
         self.chordVolumeRatio = defaults.object(forKey: chordVolumeRatioKey) as? Double ?? 0.5
+        self.melodyMIDIChannel = defaults.object(forKey: melodyMIDIChannelKey) as? Int ?? 0
+        self.chordMIDIChannel = defaults.object(forKey: chordMIDIChannelKey) as? Int ?? 0
 
         // Check if it's a new day and reset daily count if needed
         let formatter = DateFormatter()

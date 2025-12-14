@@ -15,6 +15,9 @@ final class PlaybackScheduler {
     /// Volume multiplier for chord accompaniment relative to melody (0.0-1.0)
     var chordVolumeMultiplier: Double = 0.5
 
+    var melodyChannel: Int = 0
+    var chordChannel: Int = 0
+
     init(
         midiService: MIDIService,
         samplePlayer: PianoSamplePlayer? = nil,
@@ -144,13 +147,13 @@ final class PlaybackScheduler {
                 if self.useSamples(), let player = self.samplePlayer {
                     player.play(midiNote: note.midiNoteNumber, velocity: velocity)
                 } else {
-                    self.midiService.send(noteOn: note.midiNoteNumber, velocity: velocity)
+                    self.midiService.send(noteOn: note.midiNoteNumber, velocity: velocity, channel: self.melodyChannel)
                 }
             }
             let offItem = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 if !self.useSamples() {
-                    self.midiService.send(noteOff: note.midiNoteNumber)
+                    self.midiService.send(noteOff: note.midiNoteNumber, channel: self.melodyChannel)
                 }
                 // Sample player handles note duration internally
             }
@@ -264,13 +267,13 @@ final class PlaybackScheduler {
         if useSamples(), let player = samplePlayer {
             player.play(midiNote: note, velocity: velocity)
         } else {
-            midiService.send(noteOn: note, velocity: velocity)
+            midiService.send(noteOn: note, velocity: velocity, channel: chordChannel)
         }
     }
 
     private func stopChordNote(_ note: UInt8) {
         if !useSamples() {
-            midiService.send(noteOff: note)
+            midiService.send(noteOff: note, channel: chordChannel)
         }
     }
 

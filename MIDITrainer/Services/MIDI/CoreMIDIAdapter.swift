@@ -87,12 +87,14 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
         }
     }
 
-    func send(noteOn noteNumber: UInt8, velocity: UInt8) {
-        sendMessage([0x90, noteNumber, velocity])
+    func send(noteOn noteNumber: UInt8, velocity: UInt8, channel: Int) {
+        let statusByte = UInt8(0x90 + (channel & 0x0F))
+        sendMessage([statusByte, noteNumber, velocity])
     }
 
-    func send(noteOff noteNumber: UInt8) {
-        sendMessage([0x80, noteNumber, 0])
+    func send(noteOff noteNumber: UInt8, channel: Int) {
+        let statusByte = UInt8(0x80 + (channel & 0x0F))
+        sendMessage([statusByte, noteNumber, 0])
     }
 
     func injectNoteEvent(_ event: MIDINoteEvent) {

@@ -26,6 +26,8 @@ final class PracticeEngine: ObservableObject {
     private let chordLoopDuringInput: () -> Bool
     private let chordVoicingStyle: () -> ChordVoicingStyle
     private let chordVolumeRatio: () -> Double
+    private let melodyMIDIChannel: () -> Int
+    private let chordMIDIChannel: () -> Int
     private let currentSettingsProvider: () -> PracticeSettingsSnapshot
     private let schedulingCoordinator: SchedulingCoordinator?
     private var cancellables: Set<AnyCancellable> = []
@@ -72,6 +74,8 @@ final class PracticeEngine: ObservableObject {
         chordLoopDuringInput: @escaping () -> Bool = { false },
         chordVoicingStyle: @escaping () -> ChordVoicingStyle = { .shell },
         chordVolumeRatio: @escaping () -> Double = { 0.5 },
+        melodyMIDIChannel: @escaping () -> Int = { 0 },
+        chordMIDIChannel: @escaping () -> Int = { 0 },
         currentSettingsProvider: @escaping () -> PracticeSettingsSnapshot,
         schedulingCoordinator: SchedulingCoordinator? = nil
     ) {
@@ -90,6 +94,8 @@ final class PracticeEngine: ObservableObject {
         self.chordLoopDuringInput = chordLoopDuringInput
         self.chordVoicingStyle = chordVoicingStyle
         self.chordVolumeRatio = chordVolumeRatio
+        self.melodyMIDIChannel = melodyMIDIChannel
+        self.chordMIDIChannel = chordMIDIChannel
         self.currentSettingsProvider = currentSettingsProvider
         self.schedulingCoordinator = schedulingCoordinator
         bindMIDI()
@@ -245,6 +251,7 @@ final class PracticeEngine: ObservableObject {
                 if self.madeErrorInCurrentAttempt {
                     self.replayCurrentSequence(sequence: sequence, settings: settings)
                 } else {
+                    self.feedbackService.channel = self.melodyMIDIChannel()
                     self.feedbackService.playSequenceSuccess(for: sequence.key, settings: self.feedbackSettings())
                     // Use fresh settings from provider to pick up any changes made during practice
                     let freshSettings = self.currentSettingsProvider()
@@ -293,6 +300,8 @@ final class PracticeEngine: ObservableObject {
     private func playSequenceWithChords(sequence: MelodySequence, settings: PracticeSettingsSnapshot?) {
         playbackScheduler.chordVoicingStyle = chordVoicingStyle()
         playbackScheduler.chordVolumeMultiplier = chordVolumeRatio()
+        playbackScheduler.melodyChannel = melodyMIDIChannel()
+        playbackScheduler.chordChannel = chordMIDIChannel()
         let chordsToPlay = chordAccompanimentEnabled() ? sequence.chords : nil
 
         playbackScheduler.play(sequence: sequence, chords: chordsToPlay) { [weak self] in

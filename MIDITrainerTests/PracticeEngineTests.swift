@@ -29,8 +29,8 @@ final class MockMIDIService: MIDIService {
     func connectInput(_ endpoint: MIDIEndpoint) {}
     func disconnectInput(_ endpoint: MIDIEndpoint) {}
     func selectOutput(_ endpoint: MIDIEndpoint?) {}
-    func send(noteOn noteNumber: UInt8, velocity: UInt8) {}
-    func send(noteOff noteNumber: UInt8) {}
+    func send(noteOn noteNumber: UInt8, velocity: UInt8, channel: Int) {}
+    func send(noteOff noteNumber: UInt8, channel: Int) {}
     func injectNoteEvent(_ event: MIDINoteEvent) {
         noteSubject.send(event)
     }
