@@ -239,12 +239,10 @@ final class PracticeModel: ObservableObject {
     func playQuestion(seed: UInt64? = nil) {
         isReplaying = false
         engine.playQuestion(settings: settings, seed: seed)
-        errorNoteIndex = nil
     }
 
     func replay() {
         isReplaying = true
-        errorNoteIndex = nil
         engine.replay()
     }
 
@@ -308,18 +306,13 @@ final class PracticeModel: ObservableObject {
                 case .idle:
                     self.isPlaying = false
                     self.isReplaying = false
+                    self.currentSequence = nil
                     self.awaitingNoteIndex = nil
-                case .playing(let sequence):
-                    self.isPlaying = true
-                    // keep isReplaying as set by caller
+                case .active(let sequence, let isPlayingBack):
+                    self.isPlaying = isPlayingBack
                     self.currentSequence = sequence
-                    self.awaitingNoteIndex = 0
-                    self.errorNoteIndex = nil
-                case .awaitingInput(let sequence, let expectedIndex):
-                    self.isPlaying = false
-                    self.isReplaying = false
-                    self.currentSequence = sequence
-                    self.awaitingNoteIndex = expectedIndex
+                    self.awaitingNoteIndex = self.engine.currentInputIndex
+                    // isReplaying is set by caller before triggering state change
                 case .completed(let sequence):
                     self.isPlaying = false
                     self.isReplaying = false
@@ -334,33 +327,18 @@ final class PracticeModel: ObservableObject {
         engine.$currentInputIndex
             .receive(on: DispatchQueue.main)
             .sink { [weak self] index in
-                guard let self, self.isPlaying else { return }
-                self.awaitingNoteIndex = index
+                guard let self else { return }
+                // Update awaitingNoteIndex when we have an active sequence
+                if case .active = self.engine.state {
+                    self.awaitingNoteIndex = index
+                }
             }
             .store(in: &cancellables)
 
-        midiService.noteEvents
+        engine.$errorNoteIndex
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.evaluateMistake(event: event)
-            }
+            .assign(to: \.errorNoteIndex, on: self)
             .store(in: &cancellables)
-    }
-
-    private func evaluateMistake(event: MIDINoteEvent) {
-        guard case let .noteOn(noteNumber, _) = event else { return }
-        guard let expectedIndex = awaitingNoteIndex,
-              let sequence = currentSequence,
-              expectedIndex < sequence.notes.count else {
-            errorNoteIndex = nil
-            return
-        }
-        let expectedNote = sequence.notes[expectedIndex].midiNoteNumber
-        if noteNumber == expectedNote {
-            errorNoteIndex = nil
-        } else {
-            errorNoteIndex = expectedIndex
-        }
     }
 
     private func handleSequenceCompleted() {

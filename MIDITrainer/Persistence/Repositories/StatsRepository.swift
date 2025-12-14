@@ -364,7 +364,7 @@ final class StatsRepository {
     }
 
     private func encode(degrees: Set<ScaleDegree>) throws -> String {
-        let raw = Array(degrees).map { $0.rawValue }
+        let raw = Array(degrees).map { $0.rawValue }.sorted()
         let data = try JSONEncoder().encode(raw)
         return String(data: data, encoding: .utf8) ?? "[]"
     }

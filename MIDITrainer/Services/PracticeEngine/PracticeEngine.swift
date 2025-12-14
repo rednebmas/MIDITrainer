@@ -4,8 +4,7 @@ import Foundation
 final class PracticeEngine: ObservableObject {
     enum State: Equatable {
         case idle
-        case playing(MelodySequence)
-        case awaitingInput(sequence: MelodySequence, expectedIndex: Int)
+        case active(sequence: MelodySequence, isPlayingBack: Bool)
         case completed(MelodySequence)
     }
 
@@ -32,6 +31,8 @@ final class PracticeEngine: ObservableObject {
     
     /// Tracks the current note index during playback+input phase
     @Published private(set) var currentInputIndex: Int = 0
+    /// Index of the note where the most recent error occurred (nil if last input was correct)
+    @Published private(set) var errorNoteIndex: Int?
     /// Tracks whether any mistake was made in the current attempt (resets on replay)
     @Published private(set) var madeErrorInCurrentAttempt: Bool = false
     /// Whether playback has finished (user can still input during playback)
@@ -109,21 +110,22 @@ final class PracticeEngine: ObservableObject {
             lastCorrectExpected = nil
             lastCorrectGuessed = nil
             currentInputIndex = 0
+            errorNoteIndex = nil
             madeErrorInCurrentAttempt = false
             playbackFinished = false
 
             DispatchQueue.main.async { [weak self] in
-                self?.state = .playing(sequence)
+                self?.state = .active(sequence: sequence, isPlayingBack: true)
             }
 
             playbackScheduler.play(sequence: sequence) { [weak self] in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.playbackFinished = true
-                    if case .playing(let seq) = self.state, self.currentInputIndex >= seq.notes.count {
+                    if case .active(let seq, _) = self.state, self.currentInputIndex >= seq.notes.count {
                         self.handleSequenceCompleted(sequence: seq, settings: settings)
-                    } else if case .playing(let seq) = self.state {
-                        self.state = .awaitingInput(sequence: seq, expectedIndex: self.currentInputIndex)
+                    } else if case .active(let seq, _) = self.state {
+                        self.state = .active(sequence: seq, isPlayingBack: false)
                     }
                 }
             }
@@ -168,24 +170,11 @@ final class PracticeEngine: ObservableObject {
     }
 
     private func handle(noteOn noteNumber: UInt8) {
-        // Get the current sequence from either playing or awaitingInput state
-        let sequence: MelodySequence
-        let expectedIndex: Int
-        
-        switch state {
-        case .playing(let seq):
-            sequence = seq
-            expectedIndex = currentInputIndex
-        case .awaitingInput(let seq, let idx):
-            sequence = seq
-            expectedIndex = idx
-        default:
-            return
-        }
-        
-        guard expectedIndex < sequence.notes.count else { return }
+        // Only process input in active state
+        guard case .active(let sequence, _) = state else { return }
+        guard currentInputIndex < sequence.notes.count else { return }
 
-        let expectedNote = sequence.notes[expectedIndex]
+        let expectedNote = sequence.notes[currentInputIndex]
         let isCorrect = noteNumber == expectedNote.midiNoteNumber
         let scale = Scale(key: sequence.key, type: sequence.scaleType)
 
@@ -198,28 +187,24 @@ final class PracticeEngine: ObservableObject {
             isCorrect: isCorrect
         )
 
-        persistAttempt(descriptor: descriptor, sequence: sequence, noteIndex: expectedIndex)
+        persistAttempt(descriptor: descriptor, sequence: sequence, noteIndex: currentInputIndex)
 
         if isCorrect {
+            errorNoteIndex = nil
             lastCorrectExpected = expectedNote.midiNoteNumber
             lastCorrectGuessed = noteNumber
-            let nextIndex = expectedIndex + 1
-            currentInputIndex = nextIndex
-            
-            if nextIndex >= sequence.notes.count {
+            currentInputIndex += 1
+
+            if currentInputIndex >= sequence.notes.count {
                 // User finished the sequence
                 if playbackFinished {
                     handleSequenceCompleted(sequence: sequence, settings: activeSession?.settings)
                 }
                 // If playback hasn't finished, the completion callback will handle it
-            } else {
-                // Update state to show progress (only if not in playing state)
-                if case .awaitingInput = state {
-                    state = .awaitingInput(sequence: sequence, expectedIndex: nextIndex)
-                }
             }
         } else {
             // Record that an error was made
+            errorNoteIndex = currentInputIndex
             madeErrorInCurrentAttempt = true
             hadErrorsInSequence = true
         }
@@ -268,19 +253,20 @@ final class PracticeEngine: ObservableObject {
         lastCorrectExpected = nil
         lastCorrectGuessed = nil
         currentInputIndex = 0
+        errorNoteIndex = nil
         madeErrorInCurrentAttempt = false
         playbackFinished = false
 
-        state = .playing(sequence)
+        state = .active(sequence: sequence, isPlayingBack: true)
 
         playbackScheduler.play(sequence: sequence) { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.playbackFinished = true
-                if case .playing(let seq) = self.state, self.currentInputIndex >= seq.notes.count {
+                if case .active(let seq, _) = self.state, self.currentInputIndex >= seq.notes.count {
                     self.handleSequenceCompleted(sequence: seq, settings: settings)
-                } else if case .playing(let seq) = self.state {
-                    self.state = .awaitingInput(sequence: seq, expectedIndex: self.currentInputIndex)
+                } else if case .active(let seq, _) = self.state {
+                    self.state = .active(sequence: seq, isPlayingBack: false)
                 }
             }
         }
@@ -289,9 +275,7 @@ final class PracticeEngine: ObservableObject {
     func replay() {
         let sequence: MelodySequence
         switch state {
-        case .awaitingInput(let current, _), .completed(let current):
-            sequence = current
-        case .playing(let current):
+        case .active(let current, _), .completed(let current):
             sequence = current
         default:
             return

@@ -20,7 +20,7 @@ final class SettingsSnapshotRepository {
             }
             defer { sqlite3_finalize(statement) }
 
-            let excluded = try JSONEncoder().encode(snapshot.excludedDegrees.map { $0.rawValue })
+            let excluded = try JSONEncoder().encode(snapshot.excludedDegrees.map { $0.rawValue }.sorted())
             let allowed = try JSONEncoder().encode(snapshot.allowedOctaves)
             let now = Date().timeIntervalSince1970
 

@@ -60,7 +60,6 @@ struct PracticeView: View {
                     sequence: model.currentSequence,
                     awaitingIndex: model.awaitingNoteIndex,
                     errorIndex: model.errorNoteIndex,
-                    isPlaying: model.isPlaying,
                     firstNoteName: firstNoteName,
                     sourceName: model.currentSequence?.sourceName
                 )

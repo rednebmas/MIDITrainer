@@ -4,7 +4,6 @@ struct NoteOrbsContainerView: View {
     let sequence: MelodySequence?
     let awaitingIndex: Int?
     let errorIndex: Int?
-    let isPlaying: Bool
     let firstNoteName: String?
     let sourceName: String?
 
@@ -108,7 +107,6 @@ struct NoteOrbsContainerView: View {
         sequence: nil,
         awaitingIndex: nil,
         errorIndex: nil,
-        isPlaying: false,
         firstNoteName: nil,
         sourceName: nil
     )
