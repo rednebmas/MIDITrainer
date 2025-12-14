@@ -33,9 +33,9 @@ protocol MelodySource {
 
 /// Identifies which melody source to use
 enum MelodySourceType: String, CaseIterable, Codable {
-    case random = "Random"
-    case pop909 = "Pop (POP909)"
     case billboard = "Billboard Hits"
+    case pop909 = "Pop (POP909)"
+    case random = "Random"
 
     var displayName: String { rawValue }
 

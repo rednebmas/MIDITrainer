@@ -25,7 +25,7 @@ struct PracticeSettingsSnapshot: Equatable, Codable {
         allowedOctaves: [Int] = [3, 4, 5],
         melodyLength: Int = 4,
         bpm: Int = 80,
-        melodySourceType: MelodySourceType = .random,
+        melodySourceType: MelodySourceType = .billboard,
         melodyLengthMin: Int = 3,
         melodyLengthMax: Int = 6
     ) {
