@@ -10,6 +10,30 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Scheduling") {
+                    Picker("Question Mode", selection: $settingsStore.schedulerMode) {
+                        ForEach(SchedulerMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+
+                    Text(settingsStore.schedulerMode.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if settingsStore.schedulerMode == .weaknessFocused {
+                        Toggle("Limit to current settings", isOn: $settingsStore.weaknessMatchExactSettings)
+
+                        Text(settingsStore.weaknessMatchExactSettings
+                            ? "Only shows weaknesses matching current BPM, length, degrees, and octaves"
+                            : "Shows all weaknesses for this key and scale")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        WeaknessQueueDebugView(settings: draft, matchExactSettings: settingsStore.weaknessMatchExactSettings)
+                    }
+                }
+
                 Section("Key & Scale") {
                     Picker("Key", selection: Binding(get: { draft.key.root }, set: { draft = updateKey($0) })) {
                         ForEach(NoteName.allCases, id: \.self) { name in
@@ -103,19 +127,6 @@ struct SettingsView: View {
                     Toggle("Replay on lowest key (A0)", isOn: $settingsStore.replayHotkeyEnabled)
                 }
 
-                Section("Scheduling") {
-                    Picker("Question Mode", selection: $settingsStore.schedulerMode) {
-                        ForEach(SchedulerMode.allCases, id: \.self) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(settingsStore.schedulerMode.description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
                 Section {
                     NavigationLink {
                         AdvancedSettingsView()
@@ -206,11 +217,29 @@ struct SettingsView: View {
         switch draft.melodySourceType {
         case .random:
             return nil
-        case .pop909:
-            return "909 pop songs from the POP909 dataset"
-        case .billboard:
-            return "Billboard Year-End #1-5 hits, 1950-2022"
+        case .pop909, .billboard:
+            let count = matchingMelodyCount
+            let source = draft.melodySourceType == .pop909
+                ? "909 pop songs from the POP909 dataset"
+                : "Billboard Year-End #1-5 hits, 1950-2022"
+            return "\(count) matching melodies from \(source)"
         }
+    }
+
+    private var matchingMelodyCount: Int {
+        guard draft.melodySourceType.isRealMelody else { return 0 }
+
+        let library = MelodyLibrary.library(for: draft.melodySourceType)
+        let source = RealMelodySource(library: library)
+        let scale = Scale(key: draft.key, type: draft.scaleType)
+        let allowedDegrees = ScaleDegree.allCases.filter { !draft.excludedDegrees.contains($0) }
+
+        return source.countMatchingPhrases(
+            lengthRange: draft.melodyLengthMin...draft.melodyLengthMax,
+            scale: scale,
+            allowedDegrees: allowedDegrees,
+            allowedOctaves: draft.allowedOctaves
+        )
     }
 
     private func label(for mode: FeedbackMode) -> String {

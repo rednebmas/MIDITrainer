@@ -23,6 +23,16 @@ struct SequenceHistoryEntry: Identifiable {
     let createdAt: Date
 }
 
+struct WeaknessEntry: Equatable {
+    let seed: UInt64
+    let timesAsked: Int
+    let firstAttemptFailures: Int
+
+    var weight: Double {
+        Double(firstAttemptFailures)
+    }
+}
+
 final class StatsRepository {
     private let db: Database
 
@@ -241,6 +251,99 @@ final class StatsRepository {
                     midiNotes: midiNotes,
                     wasCorrectFirstTry: seq.wasCorrect,
                     createdAt: Date(timeIntervalSince1970: seq.createdAt)
+                ))
+            }
+
+            return entries
+        }
+    }
+
+    /// Returns sequences (by seed) with the most first-attempt failures for the given settings.
+    /// A first-attempt failure is when any note in a sequence had isCorrect=0 on its first try.
+    /// - Parameter matchExactSettings: If true, matches all settings. If false, only key and scale type.
+    func topWeaknesses(for settings: PracticeSettingsSnapshot, limit: Int = 20, matchExactSettings: Bool = false) throws -> [WeaknessEntry] {
+        try db.readWrite { handle in
+            // For each sequence (melody_sequence row), determine if ANY note had isCorrect=0
+            // Then aggregate by seed to count first-attempt failures across multiple askings
+            let sql: String
+            if matchExactSettings {
+                let excluded = try encode(degrees: settings.excludedDegrees)
+                let allowed = try encode(octaves: settings.allowedOctaves)
+                sql = """
+                WITH sequence_had_mistake AS (
+                    SELECT
+                        ms.id as sequenceId,
+                        ms.seed,
+                        MAX(CASE WHEN na.isCorrect = 0 THEN 1 ELSE 0 END) as hadMistake
+                    FROM melody_sequence ms
+                    JOIN settings_snapshot ss ON ms.settingsSnapshotId = ss.id
+                    LEFT JOIN note_attempt na ON na.sequenceId = ms.id
+                    WHERE ss.keyRoot = \(settings.key.root.rawValue)
+                      AND ss.scaleType = '\(settings.scaleType.storageKey)'
+                      AND ss.excludedDegrees = '\(excluded)'
+                      AND ss.allowedOctaves = '\(allowed)'
+                      AND ss.melodyLength = \(settings.melodyLength)
+                      AND ss.bpm = \(settings.bpm)
+                    GROUP BY ms.id, ms.seed
+                )
+                SELECT
+                    seed,
+                    COUNT(*) as timesAsked,
+                    SUM(hadMistake) as firstAttemptFailures
+                FROM sequence_had_mistake
+                GROUP BY seed
+                HAVING firstAttemptFailures > 0
+                ORDER BY firstAttemptFailures DESC
+                LIMIT \(max(limit, 0));
+                """
+            } else {
+                sql = """
+                WITH sequence_had_mistake AS (
+                    SELECT
+                        ms.id as sequenceId,
+                        ms.seed,
+                        MAX(CASE WHEN na.isCorrect = 0 THEN 1 ELSE 0 END) as hadMistake
+                    FROM melody_sequence ms
+                    JOIN settings_snapshot ss ON ms.settingsSnapshotId = ss.id
+                    LEFT JOIN note_attempt na ON na.sequenceId = ms.id
+                    WHERE ss.keyRoot = ?
+                      AND ss.scaleType = ?
+                    GROUP BY ms.id, ms.seed
+                )
+                SELECT
+                    seed,
+                    COUNT(*) as timesAsked,
+                    SUM(hadMistake) as firstAttemptFailures
+                FROM sequence_had_mistake
+                GROUP BY seed
+                HAVING firstAttemptFailures > 0
+                ORDER BY firstAttemptFailures DESC
+                LIMIT ?;
+                """
+            }
+
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw DatabaseError.statementFailed(message: "Failed to prepare top weaknesses query")
+            }
+            defer { sqlite3_finalize(statement) }
+
+            if !matchExactSettings {
+                sqlite3_bind_int(statement, 1, Int32(settings.key.root.rawValue))
+                sqlite3_bind_text(statement, 2, settings.scaleType.storageKey, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_int(statement, 3, Int32(max(limit, 0)))
+            }
+
+            var entries: [WeaknessEntry] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let seed = UInt64(bitPattern: sqlite3_column_int64(statement, 0))
+                let timesAsked = Int(sqlite3_column_int(statement, 1))
+                let failures = Int(sqlite3_column_int(statement, 2))
+
+                entries.append(WeaknessEntry(
+                    seed: seed,
+                    timesAsked: timesAsked,
+                    firstAttemptFailures: failures
                 ))
             }
 

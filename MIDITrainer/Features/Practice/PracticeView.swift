@@ -115,7 +115,9 @@ struct PracticeView: View {
             // Debug Section
             if showingDebug {
                 SchedulerDebugView(
-                    entries: model.schedulerDebugEntries,
+                    mode: model.schedulerMode,
+                    spacedEntries: model.schedulerDebugEntries,
+                    weaknessEntries: model.weaknessDebugEntries,
                     pendingCount: model.pendingMistakeCount,
                     questionsUntilNextReask: model.questionsUntilNextReask,
                     onClearQueue: { model.clearMistakeQueue() }

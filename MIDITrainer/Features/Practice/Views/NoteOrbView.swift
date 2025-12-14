@@ -17,6 +17,7 @@ struct NoteOrbView: View {
     @SwiftUI.State private var shakeOffset: CGFloat = 0
     @SwiftUI.State private var showErrorFlash: Bool = false
     @SwiftUI.State private var showSuccessParticles: Bool = false
+    @SwiftUI.State private var correctFillScale: CGFloat = 0
 
     private let orbSize: CGFloat = 48
 
@@ -31,8 +32,14 @@ struct NoteOrbView: View {
 
             // Main orb
             Circle()
-                .fill(fillColor)
+                .fill(baseFillColor)
                 .frame(width: orbSize, height: orbSize)
+                .overlay(
+                    // Green correct fill that scales in from center
+                    Circle()
+                        .fill(Color.green)
+                        .scaleEffect(correctFillScale)
+                )
                 .overlay(
                     Circle()
                         .stroke(strokeColor, lineWidth: state == .awaiting ? 3 : 2)
@@ -60,14 +67,15 @@ struct NoteOrbView: View {
         }
     }
 
-    private var fillColor: Color {
+    private var baseFillColor: Color {
         switch state {
         case .pending:
             return Color.primary.opacity(0.1)
         case .awaiting:
             return Color.primary.opacity(0.15)
         case .correct:
-            return Color.green
+            // Base is transparent since we overlay the scaled green circle
+            return Color.primary.opacity(0.1)
         case .error:
             return Color.primary.opacity(0.15)
         }
@@ -78,7 +86,7 @@ struct NoteOrbView: View {
         case .pending:
             return Color.primary.opacity(0.2)
         case .awaiting:
-            return Color.yellow
+            return Color.yellow.opacity(0.5)
         case .correct:
             return Color.green
         case .error:
@@ -131,6 +139,11 @@ struct NoteOrbView: View {
     private func playSuccessAnimation() {
         showSuccessParticles = true
 
+        // Animate the green fill scaling in from center
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+            correctFillScale = 1.0
+        }
+
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
             bounceScale = 1.25
         }
@@ -167,6 +180,7 @@ struct NoteOrbView: View {
         shakeOffset = 0
         showErrorFlash = false
         showSuccessParticles = false
+        correctFillScale = 0
     }
 }
 

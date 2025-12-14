@@ -192,4 +192,99 @@ struct RealMelodySource: MelodySource {
         }
         return element
     }
+
+    /// Counts how many phrases in the library can be mapped to the given scale with the specified constraints.
+    func countMatchingPhrases(
+        lengthRange: ClosedRange<Int>,
+        scale: Scale,
+        allowedDegrees: [ScaleDegree],
+        allowedOctaves: [Int]
+    ) -> Int {
+        let matchingPhrases = library.phrases(inRange: lengthRange)
+        guard !matchingPhrases.isEmpty, !allowedDegrees.isEmpty, !allowedOctaves.isEmpty else {
+            return 0
+        }
+
+        var count = 0
+        for phrase in matchingPhrases {
+            // Try each allowed starting degree - if any works, the phrase is valid
+            for startDegree in allowedDegrees {
+                if canMapPhraseToScale(
+                    phrase: phrase,
+                    scale: scale,
+                    startDegree: startDegree,
+                    allowedDegrees: Set(allowedDegrees),
+                    allowedOctaves: allowedOctaves
+                ) {
+                    count += 1
+                    break // Only count each phrase once
+                }
+            }
+        }
+        return count
+    }
+
+    /// Checks if a phrase can be mapped to scale degrees without returning the actual notes.
+    private func canMapPhraseToScale(
+        phrase: MelodyPhrase,
+        scale: Scale,
+        startDegree: ScaleDegree,
+        allowedDegrees: Set<ScaleDegree>,
+        allowedOctaves: [Int]
+    ) -> Bool {
+        guard !allowedOctaves.isEmpty else { return false }
+
+        let scaleOffsets = scale.type.semitoneOffsets
+        let startOffset = scale.semitoneOffset(for: startDegree) ?? 0
+
+        var octaveShifts: [Int] = []
+
+        for interval in phrase.intervals {
+            let totalSemitones = startOffset + interval
+            var targetSemitone = totalSemitones % 12
+            if targetSemitone < 0 { targetSemitone += 12 }
+
+            guard let degree = findExactScaleDegree(
+                targetSemitone: targetSemitone,
+                scaleOffsets: scaleOffsets
+            ) else {
+                return false // Chromatic note
+            }
+
+            guard allowedDegrees.contains(degree) else {
+                return false
+            }
+
+            let octaveShift: Int
+            if totalSemitones >= 0 {
+                octaveShift = totalSemitones / 12
+            } else {
+                octaveShift = (totalSemitones - 11) / 12
+            }
+            octaveShifts.append(octaveShift)
+        }
+
+        let minShift = octaveShifts.min() ?? 0
+        let maxShift = octaveShifts.max() ?? 0
+        let phraseOctaveSpan = maxShift - minShift
+
+        let minAllowedOctave = allowedOctaves.min()!
+        let maxAllowedOctave = allowedOctaves.max()!
+        let allowedOctaveSpan = maxAllowedOctave - minAllowedOctave
+
+        guard phraseOctaveSpan <= allowedOctaveSpan else {
+            return false
+        }
+
+        // Check if any starting octave works
+        for startOctave in allowedOctaves {
+            let lowestOctave = startOctave + minShift
+            let highestOctave = startOctave + maxShift
+            if lowestOctave >= minAllowedOctave && highestOctave <= maxAllowedOctave {
+                return true
+            }
+        }
+
+        return false
+    }
 }

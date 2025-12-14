@@ -5,7 +5,8 @@ final class PracticeEngine: ObservableObject {
     enum State: Equatable {
         case idle
         case active(sequence: MelodySequence, isPlayingBack: Bool)
-        case completed(MelodySequence)
+        /// Sequence completed. `hadErrors` indicates if user ever made an error (persists across replays).
+        case completed(sequence: MelodySequence, hadErrors: Bool)
     }
 
     @Published private(set) var state: State = .idle
@@ -211,7 +212,7 @@ final class PracticeEngine: ObservableObject {
     }
     
     private func handleSequenceCompleted(sequence: MelodySequence, settings: PracticeSettingsSnapshot?) {
-        state = .completed(sequence)
+        state = .completed(sequence: sequence, hadErrors: hadErrorsInSequence)
         
         // Notify the scheduler of the completion (only once per sequence, not on replays)
         if !hasRecordedCompletion, let seed = currentSeed, let settings = settings {
@@ -275,7 +276,7 @@ final class PracticeEngine: ObservableObject {
     func replay() {
         let sequence: MelodySequence
         switch state {
-        case .active(let current, _), .completed(let current):
+        case .active(let current, _), .completed(sequence: let current, hadErrors: _):
             sequence = current
         default:
             return

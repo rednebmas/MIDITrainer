@@ -54,6 +54,10 @@ final class SettingsStore: ObservableObject {
     @Published var midiOutputVolume: Double {
         didSet { defaults.set(midiOutputVolume, forKey: midiOutputVolumeKey) }
     }
+    /// Whether weakness tracking should match exact settings (BPM, length, etc.) or just key/scale
+    @Published var weaknessMatchExactSettings: Bool {
+        didSet { defaults.set(weaknessMatchExactSettings, forKey: weaknessMatchExactSettingsKey) }
+    }
 
     private let defaults: UserDefaults
     private let key = "com.sambender.miditrainer.settings"
@@ -68,6 +72,7 @@ final class SettingsStore: ObservableObject {
     private let currentStreakKey = "com.sambender.miditrainer.currentStreak"
     private let useOnScreenKeyboardKey = "com.sambender.miditrainer.useOnScreenKeyboard"
     private let midiOutputVolumeKey = "com.sambender.miditrainer.midiOutputVolume"
+    private let weaknessMatchExactSettingsKey = "com.sambender.miditrainer.weaknessMatchExactSettings"
 
     private var todayDateString: String {
         let formatter = DateFormatter()
@@ -96,6 +101,7 @@ final class SettingsStore: ObservableObject {
         self.currentStreak = defaults.object(forKey: currentStreakKey) as? Int ?? 0
         self.useOnScreenKeyboard = defaults.object(forKey: useOnScreenKeyboardKey) as? Bool ?? false
         self.midiOutputVolume = defaults.object(forKey: midiOutputVolumeKey) as? Double ?? 0.75
+        self.weaknessMatchExactSettings = defaults.object(forKey: weaknessMatchExactSettingsKey) as? Bool ?? false
 
         // Check if it's a new day and reset daily count if needed
         let formatter = DateFormatter()

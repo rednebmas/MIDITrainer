@@ -8,29 +8,39 @@ final class SchedulingCoordinator: ObservableObject {
     @Published private(set) var questionsUntilNextReask: Int?
     @Published private(set) var queueSnapshot: [QueuedMistake] = []
     @Published private(set) var activeMistakeId: Int64?
-    
+
     private var activeScheduler: QuestionScheduler
     private let spacedScheduler: SpacedMistakeScheduler
+    private let weaknessScheduler: WeaknessFocusedScheduler
     private let randomScheduler: RandomScheduler
     private let onModeChange: (SchedulerMode) -> Void
-    
+
     init(
         initialMode: SchedulerMode,
         repository: MistakeQueueRepository,
+        statsRepository: StatsRepository,
+        weaknessMatchExactSettings: @escaping () -> Bool = { false },
         onModeChange: @escaping (SchedulerMode) -> Void
     ) {
         self.mode = initialMode
         self.onModeChange = onModeChange
         self.spacedScheduler = SpacedMistakeScheduler(repository: repository)
+        self.weaknessScheduler = WeaknessFocusedScheduler(
+            spacedScheduler: spacedScheduler,
+            statsRepository: statsRepository,
+            matchExactSettings: weaknessMatchExactSettings
+        )
         self.randomScheduler = RandomScheduler()
-        
+
         switch initialMode {
         case .spacedMistakes:
             self.activeScheduler = spacedScheduler
+        case .weaknessFocused:
+            self.activeScheduler = weaknessScheduler
         case .random:
             self.activeScheduler = randomScheduler
         }
-        
+
         updatePublishedState()
     }
     
@@ -38,15 +48,17 @@ final class SchedulingCoordinator: ObservableObject {
     func setMode(_ newMode: SchedulerMode) {
         guard newMode != mode else { return }
         mode = newMode
-        
+
         switch newMode {
         case .spacedMistakes:
             activeScheduler = spacedScheduler
+        case .weaknessFocused:
+            activeScheduler = weaknessScheduler
         case .random:
             activeScheduler = randomScheduler
         }
         activeMistakeId = nil
-        
+
         onModeChange(newMode)
         updatePublishedState()
     }

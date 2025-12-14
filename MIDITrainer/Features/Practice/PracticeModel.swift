@@ -41,6 +41,8 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var questionsUntilNextReask: Int?
     @Published private(set) var schedulerDebugEntries: [SchedulerDebugEntry] = []
     @Published private(set) var useOnScreenKeyboard: Bool = false
+    @Published private(set) var schedulerMode: SchedulerMode = .spacedMistakes
+    @Published private(set) var weaknessDebugEntries: [WeaknessEntry] = []
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -88,6 +90,8 @@ final class PracticeModel: ObservableObject {
         self.schedulingCoordinator = SchedulingCoordinator(
             initialMode: settingsStore.schedulerMode,
             repository: mistakeQueueRepo,
+            statsRepository: self.statsRepository,
+            weaknessMatchExactSettings: { settingsStore.weaknessMatchExactSettings },
             onModeChange: { newMode in
                 settingsStore.schedulerMode = newMode
             }
@@ -112,6 +116,7 @@ final class PracticeModel: ObservableObject {
             .sink { [weak self] newSettings in
                 self?.settings = newSettings
                 self?.refreshFirstTryAccuracy()
+                self?.refreshWeaknessEntries()
             }
             .store(in: &cancellables)
 
@@ -125,6 +130,7 @@ final class PracticeModel: ObservableObject {
         bindStats()
         bindScheduler()
         refreshFirstTryAccuracy()
+        refreshWeaknessEntries()
     }
 
     private func bindStats() {
@@ -155,6 +161,11 @@ final class PracticeModel: ObservableObject {
             .assign(to: \.questionsUntilNextReask, on: self)
             .store(in: &cancellables)
 
+        schedulingCoordinator.$mode
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.schedulerMode, on: self)
+            .store(in: &cancellables)
+
         Publishers.CombineLatest(
             schedulingCoordinator.$queueSnapshot,
             schedulingCoordinator.$activeMistakeId
@@ -177,6 +188,22 @@ final class PracticeModel: ObservableObject {
             self?.schedulerDebugEntries = entries
         }
         .store(in: &cancellables)
+    }
+
+    private func refreshWeaknessEntries() {
+        let snapshot = settings
+        let matchExact = settingsStore.weaknessMatchExactSettings
+        statsQueue.async { [weak self] in
+            guard let self else { return }
+            let entries = try? self.statsRepository.topWeaknesses(
+                for: snapshot,
+                limit: 20,
+                matchExactSettings: matchExact
+            )
+            DispatchQueue.main.async {
+                self.weaknessDebugEntries = entries ?? []
+            }
+        }
     }
 
     func clearMistakeQueue() {
@@ -313,13 +340,14 @@ final class PracticeModel: ObservableObject {
                     self.currentSequence = sequence
                     self.awaitingNoteIndex = self.engine.currentInputIndex
                     // isReplaying is set by caller before triggering state change
-                case .completed(let sequence):
+                case .completed(let sequence, let hadErrors):
                     self.isPlaying = false
                     self.isReplaying = false
                     self.currentSequence = sequence
                     self.awaitingNoteIndex = nil
-                    self.handleSequenceCompleted()
+                    self.handleSequenceCompleted(hadErrorsInSequence: hadErrors)
                     self.refreshFirstTryAccuracy()
+                    self.refreshWeaknessEntries()
                 }
             }
             .store(in: &cancellables)
@@ -341,14 +369,13 @@ final class PracticeModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func handleSequenceCompleted() {
-        // Check engine state for whether this attempt had errors
+    private func handleSequenceCompleted(hadErrorsInSequence: Bool) {
         // madeErrorInCurrentAttempt resets each replay, hadErrorsInSequence persists
         let currentAttemptHadErrors = engine.madeErrorInCurrentAttempt
 
         // If the current attempt completed without errors (won't replay)
         if !currentAttemptHadErrors {
-            if engine.hadErrorsInSequence {
+            if hadErrorsInSequence {
                 // Got it right, but had errors on previous attempts - counts as 1 question
                 settingsStore.incrementQuestionsAnswered()
                 latestFeedback = .correct
