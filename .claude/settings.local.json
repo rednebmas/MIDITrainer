@@ -9,7 +9,13 @@
       "Bash(pip3 install:*)",
       "Bash(source:*)",
       "Bash(pip install:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "WebFetch(domain:icmpc-escom2012.web.auth.gr)",
+      "WebFetch(domain:jazzomat.hfm-weimar.de)",
+      "WebFetch(domain:mir.audiolabs.uni-erlangen.de)",
+      "Bash(sqlite3:*)",
+      "Bash(unzip:*)"
     ]
   }
 }

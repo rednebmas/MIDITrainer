@@ -13,11 +13,10 @@ struct NoteOrbView: View {
 
     @SwiftUI.State private var pulseScale: CGFloat = 1.0
     @SwiftUI.State private var glowOpacity: Double = 0.4
-    @SwiftUI.State private var bounceScale: CGFloat = 1.0
     @SwiftUI.State private var shakeOffset: CGFloat = 0
     @SwiftUI.State private var showErrorFlash: Bool = false
     @SwiftUI.State private var showSuccessParticles: Bool = false
-    @SwiftUI.State private var correctFillScale: CGFloat = 0
+    @SwiftUI.State private var correctFillOpacity: Double = 0
 
     private let orbSize: CGFloat = 48
 
@@ -35,10 +34,10 @@ struct NoteOrbView: View {
                 .fill(baseFillColor)
                 .frame(width: orbSize, height: orbSize)
                 .overlay(
-                    // Green correct fill that scales in from center
+                    // Green correct fill that fades in
                     Circle()
                         .fill(Color.green)
-                        .scaleEffect(correctFillScale)
+                        .opacity(correctFillOpacity)
                 )
                 .overlay(
                     Circle()
@@ -49,7 +48,6 @@ struct NoteOrbView: View {
                     Circle()
                         .fill(Color.red.opacity(showErrorFlash ? 0.6 : 0))
                 )
-                .scaleEffect(bounceScale)
                 .offset(x: shakeOffset)
 
             // Success particles
@@ -62,7 +60,10 @@ struct NoteOrbView: View {
         }
         .onAppear {
             if state == .awaiting {
-                startPulseAnimation()
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                    pulseScale = 1.15
+                    glowOpacity = 0.7
+                }
             }
         }
     }
@@ -108,79 +109,44 @@ struct NoteOrbView: View {
     }
 
     private func handleStateChange(from oldState: State, to newState: State) {
-        switch newState {
-        case .awaiting:
-            startPulseAnimation()
-        case .correct:
-            stopPulseAnimation()
-            playSuccessAnimation()
-        case .error:
-            playErrorAnimation()
-        case .pending:
-            stopPulseAnimation()
-            resetAnimations()
-        }
-    }
-
-    private func startPulseAnimation() {
-        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-            pulseScale = 1.15
-            glowOpacity = 0.7
-        }
-    }
-
-    private func stopPulseAnimation() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            pulseScale = 1.0
-            glowOpacity = 0.4
-        }
-    }
-
-    private func playSuccessAnimation() {
-        showSuccessParticles = true
-
-        // Animate the green fill scaling in from center
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-            correctFillScale = 1.0
-        }
-
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-            bounceScale = 1.25
-        }
-
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6).delay(0.15)) {
-            bounceScale = 1.0
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            showSuccessParticles = false
-        }
-    }
-
-    private func playErrorAnimation() {
-        showErrorFlash = true
-
-        withAnimation(.linear(duration: 0.08).repeatCount(4, autoreverses: true)) {
-            shakeOffset = 6
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-            shakeOffset = 0
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                showErrorFlash = false
-            }
-        }
-    }
-
-    private func resetAnimations() {
-        bounceScale = 1.0
+        // Reset all animation state before entering new state
+        pulseScale = 1.0
+        glowOpacity = 0.4
         shakeOffset = 0
         showErrorFlash = false
         showSuccessParticles = false
-        correctFillScale = 0
+        correctFillOpacity = 0
+
+        switch newState {
+        case .awaiting:
+            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                pulseScale = 1.15
+                glowOpacity = 0.7
+            }
+        case .correct:
+            showSuccessParticles = true
+            withAnimation(.easeOut(duration: 0.1)) {
+                correctFillOpacity = 1.0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                showSuccessParticles = false
+            }
+        case .error:
+            showErrorFlash = true
+            withAnimation(.linear(duration: 0.08).repeatCount(4, autoreverses: true)) {
+                shakeOffset = 6
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                shakeOffset = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    showErrorFlash = false
+                }
+            }
+        case .pending:
+            break
+        }
     }
 }
 

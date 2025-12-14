@@ -11,6 +11,7 @@ This repo is a SwiftUI iPad app: a MIDI-based piano trainer. The app plays a 1-b
 - **Small, composable units:**
   - Prefer many small types over a few large ones.
   - Keep most functions under ~25 lines.
+- **Simplicity:** When fixing bugs, or refactoring, prefer solutions that delete code over ones that add code without changing functionality. More code is more complexity, not less.
 - **Determinism:** Sequence generation must support a seed for reproducible tests.
 - **Threading:** Never block the main thread. MIDI callbacks + persistence writes must be off-main.
 - **Correctness rules (product truth):**
