@@ -31,7 +31,7 @@ final class PracticeEngine: ObservableObject {
     private var lastCorrectGuessed: UInt8?
     
     /// Tracks the current note index during playback+input phase
-    private var currentInputIndex: Int = 0
+    @Published private(set) var currentInputIndex: Int = 0
     /// Tracks whether any mistake was made in the current attempt (resets on replay)
     @Published private(set) var madeErrorInCurrentAttempt: Bool = false
     /// Whether playback has finished (user can still input during playback)

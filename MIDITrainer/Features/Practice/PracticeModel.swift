@@ -313,7 +313,7 @@ final class PracticeModel: ObservableObject {
                     self.isPlaying = true
                     // keep isReplaying as set by caller
                     self.currentSequence = sequence
-                    self.awaitingNoteIndex = nil
+                    self.awaitingNoteIndex = 0
                     self.errorNoteIndex = nil
                 case .awaitingInput(let sequence, let expectedIndex):
                     self.isPlaying = false
@@ -328,6 +328,14 @@ final class PracticeModel: ObservableObject {
                     self.handleSequenceCompleted()
                     self.refreshFirstTryAccuracy()
                 }
+            }
+            .store(in: &cancellables)
+
+        engine.$currentInputIndex
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] index in
+                guard let self, self.isPlaying else { return }
+                self.awaitingNoteIndex = index
             }
             .store(in: &cancellables)
 

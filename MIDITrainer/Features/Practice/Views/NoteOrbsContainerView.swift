@@ -77,11 +77,6 @@ struct NoteOrbsContainerView: View {
             return .error
         }
 
-        // During playback, show neutral state
-        if isPlaying {
-            return .pending
-        }
-
         guard let awaiting = awaitingIndex else {
             // Sequence completed - all are correct
             return .correct
