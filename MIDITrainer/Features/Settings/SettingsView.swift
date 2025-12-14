@@ -25,7 +25,48 @@ struct SettingsView: View {
                 }
 
                 Section("Melody") {
-                    Stepper("Length: \(draft.melodyLength) notes", value: $draft.melodyLength, in: 1...16)
+                    Picker("Source", selection: $draft.melodySourceType) {
+                        ForEach(MelodySourceType.allCases, id: \.self) { source in
+                            Text(source.displayName).tag(source)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(lengthRangeLabel)
+                        HStack {
+                            Text("\(draft.melodyLengthMin)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            Slider(
+                                value: Binding(
+                                    get: { Double(draft.melodyLengthMin) },
+                                    set: { draft.melodyLengthMin = Int($0) }
+                                ),
+                                in: 1...12,
+                                step: 1
+                            )
+                            Slider(
+                                value: Binding(
+                                    get: { Double(draft.melodyLengthMax) },
+                                    set: { draft.melodyLengthMax = max(draft.melodyLengthMin, Int($0)) }
+                                ),
+                                in: 1...12,
+                                step: 1
+                            )
+                            Text("\(draft.melodyLengthMax)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                        }
+                    }
+
+                    if draft.melodySourceType == .realMelodies {
+                        Text("Uses real melody phrases from pop songs")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Stepper("BPM: \(draft.bpm)", value: $draft.bpm, in: 40...200)
                 }
 
@@ -105,7 +146,10 @@ struct SettingsView: View {
             excludedDegrees: draft.excludedDegrees,
             allowedOctaves: draft.allowedOctaves,
             melodyLength: draft.melodyLength,
-            bpm: draft.bpm
+            bpm: draft.bpm,
+            melodySourceType: draft.melodySourceType,
+            melodyLengthMin: draft.melodyLengthMin,
+            melodyLengthMax: draft.melodyLengthMax
         )
     }
 
@@ -123,7 +167,10 @@ struct SettingsView: View {
             excludedDegrees: draft.excludedDegrees,
             allowedOctaves: sorted.isEmpty ? draft.allowedOctaves : sorted,
             melodyLength: draft.melodyLength,
-            bpm: draft.bpm
+            bpm: draft.bpm,
+            melodySourceType: draft.melodySourceType,
+            melodyLengthMin: draft.melodyLengthMin,
+            melodyLengthMax: draft.melodyLengthMax
         )
     }
 
@@ -140,8 +187,19 @@ struct SettingsView: View {
             excludedDegrees: excluded,
             allowedOctaves: draft.allowedOctaves,
             melodyLength: draft.melodyLength,
-            bpm: draft.bpm
+            bpm: draft.bpm,
+            melodySourceType: draft.melodySourceType,
+            melodyLengthMin: draft.melodyLengthMin,
+            melodyLengthMax: draft.melodyLengthMax
         )
+    }
+
+    private var lengthRangeLabel: String {
+        if draft.melodyLengthMin == draft.melodyLengthMax {
+            return "Length: \(draft.melodyLengthMin) notes"
+        } else {
+            return "Length: \(draft.melodyLengthMin)-\(draft.melodyLengthMax) notes"
+        }
     }
 
     private func label(for mode: FeedbackMode) -> String {

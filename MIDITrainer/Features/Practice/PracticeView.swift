@@ -61,7 +61,8 @@ struct PracticeView: View {
                     awaitingIndex: model.awaitingNoteIndex,
                     errorIndex: model.errorNoteIndex,
                     isPlaying: model.isPlaying,
-                    firstNoteName: firstNoteName
+                    firstNoteName: firstNoteName,
+                    sourceName: model.currentSequence?.sourceName
                 )
 
                 // Floating Feedback Overlay

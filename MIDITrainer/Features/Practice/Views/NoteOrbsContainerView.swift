@@ -6,6 +6,7 @@ struct NoteOrbsContainerView: View {
     let errorIndex: Int?
     let isPlaying: Bool
     let firstNoteName: String?
+    let sourceName: String?
 
     @SwiftUI.State private var appearingOrbs: Set<Int> = []
 
@@ -26,17 +27,30 @@ struct NoteOrbsContainerView: View {
                     animateOrbsAppearance(count: sequence.notes.count)
                 }
 
-                if let name = firstNoteName {
-                    HStack(spacing: 6) {
-                        Image(systemName: "music.note")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text("First note: \(name)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                VStack(spacing: 4) {
+                    if let name = firstNoteName {
+                        HStack(spacing: 6) {
+                            Image(systemName: "music.note")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("First note: \(name)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .padding(.top, 8)
+
+                    if let source = sourceName {
+                        HStack(spacing: 6) {
+                            Image(systemName: "waveform")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            Text(source)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
                 }
+                .padding(.top, 8)
             } else {
                 // Empty state
                 VStack(spacing: 16) {
@@ -96,6 +110,7 @@ struct NoteOrbsContainerView: View {
         awaitingIndex: nil,
         errorIndex: nil,
         isPlaying: false,
-        firstNoteName: nil
+        firstNoteName: nil,
+        sourceName: nil
     )
 }

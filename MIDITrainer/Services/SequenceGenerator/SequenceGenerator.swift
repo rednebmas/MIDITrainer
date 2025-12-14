@@ -80,26 +80,50 @@ struct RhythmLibrary {
 
 struct SequenceGenerator {
     private let rhythmLibrary: RhythmLibrary
+    private let melodyLibrary: MelodyPhraseLibrary
 
-    init(rhythmLibrary: RhythmLibrary = .default) {
+    init(rhythmLibrary: RhythmLibrary = .default, melodyLibrary: MelodyPhraseLibrary? = nil) {
         self.rhythmLibrary = rhythmLibrary
+        self.melodyLibrary = melodyLibrary ?? MelodyLibrary.shared.library
     }
 
     func generate(settings: PracticeSettingsSnapshot, seed: UInt64? = nil) -> MelodySequence {
         let selectedSeed = seed ?? UInt64.random(in: .min ... .max)
-        var generator = SeededGenerator(seed: selectedSeed)
+        var rng = SeededGenerator(seed: selectedSeed)
 
         let allowedDegrees = allowedScaleDegrees(excluding: settings.excludedDegrees)
         let allowedOctaves = settings.allowedOctaves
         let scale = Scale(key: settings.key, type: settings.scaleType)
-        let rhythmPattern = rhythmLibrary.pattern(for: settings.melodyLength, rng: &generator)
 
-        let notes = buildNotes(
-            pattern: rhythmPattern,
+        // Get melody source based on settings
+        let melodySource: MelodySource = {
+            switch settings.melodySourceType {
+            case .random:
+                return RandomMelodySource()
+            case .realMelodies:
+                return RealMelodySource(library: melodyLibrary)
+            }
+        }()
+
+        // Use the length range for all sources
+        let lengthRange = settings.melodyLengthRange
+
+        // Generate melody using the source
+        let result = melodySource.generateMelody(
+            lengthRange: lengthRange,
             scale: scale,
             allowedDegrees: allowedDegrees,
             allowedOctaves: allowedOctaves,
-            rng: &generator
+            rng: &rng
+        )
+
+        // Get rhythm pattern for the actual note count
+        let rhythmPattern = rhythmLibrary.pattern(for: result.notes.count, rng: &rng)
+
+        // Build melody notes with timing
+        let notes = buildNotesFromMidi(
+            midiNotes: result.notes,
+            pattern: rhythmPattern
         )
 
         return MelodySequence(
@@ -109,7 +133,8 @@ struct SequenceGenerator {
             excludedDegrees: settings.excludedDegrees,
             allowedOctaves: allowedOctaves,
             bpm: settings.bpm,
-            seed: selectedSeed
+            seed: selectedSeed,
+            sourceId: result.sourceId
         )
     }
 
@@ -118,41 +143,34 @@ struct SequenceGenerator {
         return degrees.isEmpty ? ScaleDegree.allCases : degrees
     }
 
-    private func buildNotes(
-        pattern: RhythmPattern,
-        scale: Scale,
-        allowedDegrees: [ScaleDegree],
-        allowedOctaves: [Int],
-        rng: inout SeededGenerator
+    private func buildNotesFromMidi(
+        midiNotes: [UInt8],
+        pattern: RhythmPattern
     ) -> [MelodyNote] {
         var notes: [MelodyNote] = []
-        notes.reserveCapacity(pattern.noteCount)
+        notes.reserveCapacity(midiNotes.count)
 
         var startBeat: Double = 0
-        for index in 0..<pattern.noteCount {
-            let duration = pattern.durations[index]
-            let degree = randomElement(from: allowedDegrees, using: &rng)
-            let octave = randomElement(from: allowedOctaves, using: &rng)
-            if let midiNote = scale.midiNoteNumber(for: degree, octave: octave) {
-                let note = MelodyNote(
-                    midiNoteNumber: midiNote,
-                    startBeat: startBeat,
-                    durationBeats: duration,
-                    index: index
-                )
-                notes.append(note)
+        for (index, midiNote) in midiNotes.enumerated() {
+            // Use pattern duration if available, otherwise use even spacing
+            let duration: Double
+            if index < pattern.durations.count {
+                duration = pattern.durations[index]
+            } else {
+                duration = 4.0 / Double(midiNotes.count)
             }
+
+            let note = MelodyNote(
+                midiNoteNumber: midiNote,
+                startBeat: startBeat,
+                durationBeats: duration,
+                index: index
+            )
+            notes.append(note)
             startBeat += duration
         }
 
         return notes
-    }
-
-    private func randomElement<T>(from array: [T], using rng: inout some RandomNumberGenerator) -> T {
-        guard let element = array.randomElement(using: &rng) else {
-            fatalError("randomElement called with empty array; guard this before calling")
-        }
-        return element
     }
 }
 
