@@ -1,0 +1,23 @@
+Train your ear with real melodies from jazz standards and pop classics.
+
+MIDI Trainer plays a short melody, then challenges you to play it back on your MIDI keyboard. Unlike other ear training apps that use random notes, MIDI Trainer uses real musical phrases from professional transcriptions, helping you develop practical musicianship.
+
+KEY FEATURES:
+
+- Real Melodies: Practice with phrases extracted from the Weimar Jazz Database (jazz solos) and McGill Billboard Dataset (pop hits)
+- MIDI Integration: Connect any MIDI keyboard via USB or Bluetooth
+- Adaptive Practice: The app focuses on intervals and patterns you find challenging
+- Multiple Scales: Practice in major, minor, and modal scales
+- Detailed Statistics: Track your progress and identify weak spots
+
+HOW IT WORKS:
+
+1. Connect your MIDI keyboard
+2. Choose your scale and difficulty settings
+3. Listen to the melody
+4. Play it back - the app waits for you to match each note
+5. Review your accuracy and learn from mistakes
+
+Perfect for musicians, music students, and anyone wanting to improve their ear and sight-reading skills.
+
+Requires a MIDI keyboard connected via USB or Bluetooth.

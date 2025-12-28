@@ -1,0 +1,13 @@
+app_identifier("com.sambender.TheMIDITrainer")
+apple_id(ENV["APPLE_ID"] || "sambndr@uw.edu")
+team_id("2VJY2AJVXJ")
+
+for_platform :ios do
+  for_lane :beta do
+    app_identifier("com.sambender.TheMIDITrainer")
+  end
+
+  for_lane :release do
+    app_identifier("com.sambender.TheMIDITrainer")
+  end
+end

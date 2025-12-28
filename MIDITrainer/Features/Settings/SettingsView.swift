@@ -2,8 +2,9 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
+    @EnvironmentObject private var midiService: CoreMIDIAdapter
     @State private var draft: PracticeSettingsSnapshot = PracticeSettingsSnapshot()
-    @State private var feedback: FeedbackSettings = FeedbackSettings()
+    @State private var isListeningForHotkey: Bool = false
 
     private let allOctaves = Array(1...7)
 
@@ -137,6 +138,14 @@ struct SettingsView: View {
                             }
                         ))
                     }
+
+                    Toggle("Octave matters", isOn: $settingsStore.octaveMatters)
+
+                    Text(settingsStore.octaveMatters
+                        ? "Must play the exact octave shown"
+                        : "Only pitch class matters (any octave accepted)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Excluded degrees") {
@@ -150,15 +159,52 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Feedback") {
-                    Picker("Mode", selection: $feedback.mode) {
-                        ForEach(FeedbackMode.allCases, id: \.self) { mode in
-                            Text(label(for: mode)).tag(mode)
+                Section("Replay Hotkey") {
+                    HStack {
+                        Text("Key")
+                        Spacer()
+                        if isListeningForHotkey {
+                            Text("Press a key...")
+                                .foregroundStyle(.secondary)
+                        } else if let note = settingsStore.replayHotkeyNote {
+                            Text(midiNoteName(note))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Not set")
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .pickerStyle(.segmented)
 
-                    Toggle("Replay on lowest key (A0)", isOn: $settingsStore.replayHotkeyEnabled)
+                    HStack {
+                        Button(isListeningForHotkey ? "Cancel" : "Set Key") {
+                            isListeningForHotkey.toggle()
+                        }
+
+                        Spacer()
+
+                        if settingsStore.replayHotkeyNote != nil && !isListeningForHotkey {
+                            Button("Clear", role: .destructive) {
+                                settingsStore.replayHotkeyNote = nil
+                            }
+                        }
+                    }
+                }
+                .onReceive(midiService.noteEvents) { event in
+                    guard isListeningForHotkey else { return }
+                    if case .noteOn(let noteNumber, _) = event {
+                        settingsStore.replayHotkeyNote = noteNumber
+                        isListeningForHotkey = false
+                    }
+                }
+
+                Section("Display") {
+                    Toggle("Show note orbs", isOn: $settingsStore.showNoteOrbs)
+
+                    Text(settingsStore.showNoteOrbs
+                        ? "Shows progress through the melody"
+                        : "Shows status text only")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section {
@@ -167,19 +213,23 @@ struct SettingsView: View {
                     } label: {
                         Text("Advanced")
                     }
+
+                    NavigationLink {
+                        AcknowledgementsView()
+                    } label: {
+                        Text("Acknowledgements")
+                    }
                 }
             }
             .navigationTitle("Settings")
             .onAppear {
                 draft = settingsStore.settings
-                feedback = settingsStore.feedback
             }
             .onChange(of: settingsStore.settings) { newValue in
                 draft = newValue
             }
             .onDisappear {
                 settingsStore.update(draft)
-                settingsStore.updateFeedback(feedback)
             }
         }
     }
@@ -290,11 +340,10 @@ struct SettingsView: View {
         }
     }
 
-    private func label(for mode: FeedbackMode) -> String {
-        switch mode {
-        case .none: return "Off"
-        case .rootNote: return "Root Note"
-        case .rootTriad: return "Root Triad"
-        }
+    private func midiNoteName(_ note: UInt8) -> String {
+        let noteNames = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"]
+        let octave = Int(note) / 12 - 1
+        let noteName = noteNames[Int(note) % 12]
+        return "\(noteName)\(octave)"
     }
 }

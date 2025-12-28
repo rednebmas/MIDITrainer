@@ -1,0 +1,5 @@
+Initial release featuring:
+- Real melody phrases from jazz and pop music
+- MIDI keyboard integration
+- Adaptive practice focusing on weak intervals
+- Detailed progress tracking

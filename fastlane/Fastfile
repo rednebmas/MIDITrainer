@@ -1,0 +1,76 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Build the app for App Store submission"
+  lane :build do
+    increment_build_number_if_needed
+
+    # Automatically fetch/create App Store distribution certificate
+    get_certificates(
+      platform: "ios"
+    )
+
+    # Automatically fetch/create App Store provisioning profile
+    get_provisioning_profile(
+      app_identifier: "com.sambender.TheMIDITrainer",
+      readonly: false
+    )
+
+    build_app(
+      scheme: "MIDITrainer",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "MIDITrainer.ipa"
+    )
+  end
+
+  desc "Upload to App Store Connect (TestFlight)"
+  lane :beta do
+    build
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Upload to App Store for review"
+  lane :release do
+    build
+    upload_to_app_store(
+      skip_screenshots: true,
+      skip_metadata: false,
+      submit_for_review: false,
+      automatic_release: false,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
+  desc "Increment build number if current build exists on App Store Connect"
+  private_lane :increment_build_number_if_needed do
+    latest_build = latest_testflight_build_number(
+      app_identifier: "com.sambender.TheMIDITrainer"
+    ) rescue 0
+
+    current_build = get_build_number.to_i
+
+    if current_build <= latest_build
+      increment_build_number(
+        build_number: latest_build + 1
+      )
+    end
+  end
+
+  desc "Run tests"
+  lane :test do
+    run_tests(
+      scheme: "MIDITrainer",
+      device: "iPad Pro 13-inch (M4)"
+    )
+  end
+
+  desc "Take screenshots for App Store"
+  lane :screenshots do
+    capture_screenshots(
+      scheme: "MIDITrainer"
+    )
+  end
+end
