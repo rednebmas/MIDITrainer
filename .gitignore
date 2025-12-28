@@ -23,3 +23,6 @@ fastlane/README.md
 
 # Python virtual environment
 .venv/
+
+# App Store screenshots (generated)
+screenshots/
