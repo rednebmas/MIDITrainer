@@ -148,9 +148,6 @@ Attribution requested (scholarly norm):
 ### POP909 Dataset (MIT License)
 Standard MIT license attribution included in Acknowledgements view.
 
-### Piano Samples
-**TODO**: Verify the source and licensing of the piano samples (Piano.ff.*.mp3). These were copied from an older project and the original source is unknown.
-
 ## Troubleshooting
 
 ### "No signing certificate" error
