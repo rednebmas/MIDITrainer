@@ -34,6 +34,7 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
     private var connectedSourceIDs: Set<MIDIUniqueID> = []
     private var selectedOutputID: MIDIUniqueID?
     private var desiredInputIDs: Set<MIDIUniqueID> = []
+    private var pendingRefresh: DispatchWorkItem?
 
     func start() {
         print("[MIDI] start() called")
@@ -270,28 +271,29 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
         case .msgObjectAdded:
             let addNotification = notificationPtr.withMemoryRebound(to: MIDIObjectAddRemoveNotification.self, capacity: 1) { $0.pointee }
             print("[MIDI]   Object added - childType: \(addNotification.childType)")
-            DispatchQueue.main.async { [weak self] in
-                self?.refreshEndpoints()
-            }
+            scheduleRefresh()
         case .msgObjectRemoved:
             let removeNotification = notificationPtr.withMemoryRebound(to: MIDIObjectAddRemoveNotification.self, capacity: 1) { $0.pointee }
             print("[MIDI]   Object removed - childType: \(removeNotification.childType)")
-            DispatchQueue.main.async { [weak self] in
-                self?.refreshEndpoints()
-            }
+            scheduleRefresh()
         case .msgPropertyChanged:
-            print("[MIDI]   Property changed - triggering refresh")
-            DispatchQueue.main.async { [weak self] in
-                self?.refreshEndpoints()
-            }
+            print("[MIDI]   Property changed")
+            scheduleRefresh()
         case .msgSetupChanged:
-            print("[MIDI]   Setup changed - triggering refresh")
-            DispatchQueue.main.async { [weak self] in
-                self?.refreshEndpoints()
-            }
+            print("[MIDI]   Setup changed")
+            scheduleRefresh()
         default:
             break
         }
+    }
+
+    private func scheduleRefresh() {
+        pendingRefresh?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.refreshEndpoints()
+        }
+        pendingRefresh = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
     }
 
     private func notificationName(_ id: MIDINotificationMessageID) -> String {

@@ -65,13 +65,18 @@ final class PracticeModel: ObservableObject {
         self.midiService = midiService
         self.settingsStore = settingsStore
         self.settings = settingsStore.settings
-        // Initialize values early so the closures can capture them
-        let initialUseOnScreenKeyboard = settingsStore.useOnScreenKeyboard
         let initialVolume = settingsStore.midiOutputVolume
         let playbackScheduler = PlaybackScheduler(
             midiService: midiService,
             samplePlayer: pianoSamplePlayer,
-            useSamples: { [weak settingsStore] in settingsStore?.useOnScreenKeyboard ?? initialUseOnScreenKeyboard },
+            useSamples: { [weak settingsStore] in
+                guard let store = settingsStore else { return false }
+                if store.useOnScreenKeyboard { return true }
+                if let deviceName = store.lastSelectedOutputName {
+                    return store.deviceSettings(for: deviceName).playSamplesForMIDIInput
+                }
+                return false
+            },
             volumeProvider: { [weak settingsStore] in settingsStore?.midiOutputVolume ?? initialVolume }
         )
 
@@ -334,29 +339,63 @@ final class PracticeModel: ObservableObject {
             print("[MIDI]   Available: '\(output.name)' id=\(output.id) offline=\(output.isOffline)")
         }
 
-        guard selectedOutputID == nil, !outputs.isEmpty else {
-            print("[MIDI]   Skipping: selectedOutputID=\(String(describing: selectedOutputID)), outputs.isEmpty=\(outputs.isEmpty)")
+        guard !outputs.isEmpty else {
+            print("[MIDI]   Skipping: no outputs available")
+            return
+        }
+
+        let currentDeviceOnline = selectedOutputID != nil &&
+            outputs.contains(where: { $0.id == selectedOutputID && !$0.isOffline })
+
+        guard !currentDeviceOnline else {
+            print("[MIDI]   Skipping: current device is online")
             return
         }
 
         if let lastID = settingsStore.lastSelectedOutputID,
            let matchingEndpoint = outputs.first(where: { $0.id == lastID && !$0.isOffline }) {
             print("[MIDI]   Matched by ID: '\(matchingEndpoint.name)'")
-            midiService.selectOutput(matchingEndpoint)
-            connectMatchingInput(for: matchingEndpoint)
+            autoSelect(matchingEndpoint)
             return
         }
 
         if let lastName = settingsStore.lastSelectedOutputName,
            let matchingEndpoint = outputs.first(where: { $0.name == lastName && !$0.isOffline }) {
             print("[MIDI]   Matched by name: '\(matchingEndpoint.name)'")
-            midiService.selectOutput(matchingEndpoint)
-            connectMatchingInput(for: matchingEndpoint)
+            autoSelect(matchingEndpoint)
             settingsStore.lastSelectedOutputID = matchingEndpoint.id
             return
         }
 
-        print("[MIDI]   No match found")
+        let realDevices = outputs.filter { endpoint in
+            let name = endpoint.name.lowercased()
+            let isSystemDevice = name.contains("network session") ||
+                name.contains("garageband") ||
+                name.contains("virtual") ||
+                name.contains("atsequencer") ||
+                name.contains("iac driver")
+            return !endpoint.isOffline && !isSystemDevice
+        }
+
+        if realDevices.count == 1, let device = realDevices.first {
+            print("[MIDI]   Auto-selecting only available real device: '\(device.name)'")
+            autoSelect(device)
+            settingsStore.lastSelectedOutputID = device.id
+            settingsStore.lastSelectedOutputName = device.name
+            return
+        }
+
+        if realDevices.count > 1 {
+            print("[MIDI]   Multiple real devices available, not auto-selecting: \(realDevices.map(\.name))")
+        } else {
+            print("[MIDI]   No real devices found")
+        }
+    }
+
+    private func autoSelect(_ endpoint: MIDIEndpoint) {
+        midiService.selectOutput(endpoint)
+        currentDeviceSettings = settingsStore.deviceSettings(for: endpoint.name)
+        connectMatchingInput(for: endpoint)
     }
 
     private func bind() {
@@ -484,9 +523,10 @@ final class PracticeModel: ObservableObject {
 
     private func refreshFirstTryAccuracy() {
         let snapshot = settings
+        let startOfToday = Calendar.current.startOfDay(for: Date())
         statsQueue.async { [weak self] in
             guard let self else { return }
-            let accuracy = try? self.statsRepository.firstTryAccuracy(for: snapshot, limit: 20)
+            let accuracy = try? self.statsRepository.firstTryAccuracy(for: snapshot, limit: 1000, since: startOfToday)
             let history = try? self.statsRepository.sequenceHistory(for: snapshot, limit: 20)
             DispatchQueue.main.async {
                 self.firstTryAccuracy = accuracy

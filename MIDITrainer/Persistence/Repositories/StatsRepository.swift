@@ -112,12 +112,11 @@ final class StatsRepository {
         )
     }
 
-    /// Computes the first-try accuracy for the last N sequences (default 20) that match the exact current settings.
-    /// A sequence counts as a success if it has zero incorrect attempts recorded.
-    func firstTryAccuracy(for settings: PracticeSettingsSnapshot, limit: Int = 20) throws -> FirstTryAccuracy? {
+    func firstTryAccuracy(for settings: PracticeSettingsSnapshot, limit: Int = 20, since: Date? = nil) throws -> FirstTryAccuracy? {
         try db.readWrite { handle in
             let excluded = try encode(degrees: settings.excludedDegrees)
             let allowed = try encode(octaves: settings.allowedOctaves)
+            let dateFilter = since != nil ? "AND ms.createdAt >= ?" : ""
             let sql = """
             WITH filtered AS (
                 SELECT ms.id
@@ -129,6 +128,7 @@ final class StatsRepository {
                   AND ss.allowedOctaves = ?
                   AND ss.melodyLength = ?
                   AND ss.bpm = ?
+                  \(dateFilter)
                 ORDER BY ms.createdAt DESC
                 LIMIT ?
             ),
@@ -155,7 +155,12 @@ final class StatsRepository {
             sqlite3_bind_text(statement, 4, allowed, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(statement, 5, Int32(settings.melodyLength))
             sqlite3_bind_int(statement, 6, Int32(settings.bpm))
-            sqlite3_bind_int(statement, 7, Int32(max(limit, 0)))
+            var nextIndex: Int32 = 7
+            if let since {
+                sqlite3_bind_double(statement, nextIndex, since.timeIntervalSince1970)
+                nextIndex += 1
+            }
+            sqlite3_bind_int(statement, nextIndex, Int32(max(limit, 0)))
 
             guard sqlite3_step(statement) == SQLITE_ROW else {
                 throw DatabaseError.statementFailed(message: "Failed to read first-try accuracy row")

@@ -103,7 +103,7 @@ struct PracticeView: View {
             )
             .padding(.bottom, 8)
 
-            // Debug toggle
+            #if DEBUG
             Button {
                 withAnimation { showingDebug.toggle() }
             } label: {
@@ -118,7 +118,6 @@ struct PracticeView: View {
             .buttonStyle(.plain)
             .padding(.bottom, 8)
 
-            // Debug Section
             if showingDebug {
                 SchedulerDebugView(
                     mode: model.schedulerMode,
@@ -131,6 +130,7 @@ struct PracticeView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
             }
+            #endif
         }
         .sheet(isPresented: $showingMIDISettings) {
             MIDISettingsSheet(

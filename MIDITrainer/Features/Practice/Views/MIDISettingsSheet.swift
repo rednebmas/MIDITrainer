@@ -32,7 +32,6 @@ struct MIDISettingsSheet: View {
                         Button {
                             model.setUseOnScreenKeyboard(false)
                             model.selectOutput(id: endpoint.id)
-                            dismiss()
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -52,6 +51,7 @@ struct MIDISettingsSheet: View {
                                         .foregroundStyle(.blue)
                                 }
                             }
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -61,7 +61,7 @@ struct MIDISettingsSheet: View {
                     Text("Connect a MIDI keyboard for the best experience")
                 }
 
-                if let settings = model.currentDeviceSettings, !model.useOnScreenKeyboard, model.selectedOutputID != nil {
+                if let settings = model.currentDeviceSettings, !model.useOnScreenKeyboard {
                     Section {
                         Toggle(isOn: Binding(
                             get: { settings.playSamplesForMIDIInput },
@@ -95,6 +95,7 @@ struct MIDISettingsSheet: View {
                                     .foregroundStyle(.blue)
                             }
                         }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 } header: {
