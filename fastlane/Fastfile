@@ -1,6 +1,16 @@
 default_platform(:ios)
 
 platform :ios do
+  before_all do
+    if ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"]
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"],
+        key_filepath: ENV["APP_STORE_CONNECT_API_KEY_KEY_FILEPATH"]
+      )
+    end
+  end
+
   desc "Build the app for App Store submission"
   lane :build do
     increment_build_number_if_needed
