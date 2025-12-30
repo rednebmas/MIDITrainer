@@ -15,14 +15,12 @@ final class PracticeEngine: ObservableObject {
     private let sequenceGenerator: SequenceGenerator
     private let playbackScheduler: PlaybackScheduler
     private let scoringService: ScoringService
-    private let feedbackService: FeedbackService
     private let settingsRepository: SettingsSnapshotRepository
     private let sessionRepository: SessionRepository
     private let sequenceRepository: SequenceRepository
     private let attemptRepository: AttemptRepository
     private let statsRepository: StatsRepository?
-    private let feedbackSettings: () -> FeedbackSettings
-    private let replayHotkeyEnabled: () -> Bool
+    private let replayHotkeyNote: () -> UInt8?
     private let chordAccompanimentEnabled: () -> Bool
     private let chordLoopDuringInput: () -> Bool
     private let chordVoicingStyle: () -> ChordVoicingStyle
@@ -30,6 +28,8 @@ final class PracticeEngine: ObservableObject {
     private let melodyMIDIChannel: () -> Int
     private let chordMIDIChannel: () -> Int
     private let weightIntervalsByErrorRate: () -> Bool
+    private let octaveMatters: () -> Bool
+    private let useOnScreenKeyboard: () -> Bool
     private let currentSettingsProvider: () -> PracticeSettingsSnapshot
     private let schedulingCoordinator: SchedulingCoordinator?
     private var cancellables: Set<AnyCancellable> = []
@@ -65,14 +65,12 @@ final class PracticeEngine: ObservableObject {
         sequenceGenerator: SequenceGenerator,
         playbackScheduler: PlaybackScheduler,
         scoringService: ScoringService,
-        feedbackService: FeedbackService,
         settingsRepository: SettingsSnapshotRepository,
         sessionRepository: SessionRepository,
         sequenceRepository: SequenceRepository,
         attemptRepository: AttemptRepository,
         statsRepository: StatsRepository? = nil,
-        feedbackSettings: @escaping () -> FeedbackSettings,
-        replayHotkeyEnabled: @escaping () -> Bool,
+        replayHotkeyNote: @escaping () -> UInt8?,
         chordAccompanimentEnabled: @escaping () -> Bool = { true },
         chordLoopDuringInput: @escaping () -> Bool = { false },
         chordVoicingStyle: @escaping () -> ChordVoicingStyle = { .shell },
@@ -80,6 +78,8 @@ final class PracticeEngine: ObservableObject {
         melodyMIDIChannel: @escaping () -> Int = { 0 },
         chordMIDIChannel: @escaping () -> Int = { 0 },
         weightIntervalsByErrorRate: @escaping () -> Bool = { false },
+        octaveMatters: @escaping () -> Bool = { true },
+        useOnScreenKeyboard: @escaping () -> Bool = { false },
         currentSettingsProvider: @escaping () -> PracticeSettingsSnapshot,
         schedulingCoordinator: SchedulingCoordinator? = nil
     ) {
@@ -87,14 +87,12 @@ final class PracticeEngine: ObservableObject {
         self.sequenceGenerator = sequenceGenerator
         self.playbackScheduler = playbackScheduler
         self.scoringService = scoringService
-        self.feedbackService = feedbackService
         self.settingsRepository = settingsRepository
         self.sessionRepository = sessionRepository
         self.sequenceRepository = sequenceRepository
         self.attemptRepository = attemptRepository
         self.statsRepository = statsRepository
-        self.feedbackSettings = feedbackSettings
-        self.replayHotkeyEnabled = replayHotkeyEnabled
+        self.replayHotkeyNote = replayHotkeyNote
         self.chordAccompanimentEnabled = chordAccompanimentEnabled
         self.chordLoopDuringInput = chordLoopDuringInput
         self.chordVoicingStyle = chordVoicingStyle
@@ -102,6 +100,8 @@ final class PracticeEngine: ObservableObject {
         self.melodyMIDIChannel = melodyMIDIChannel
         self.chordMIDIChannel = chordMIDIChannel
         self.weightIntervalsByErrorRate = weightIntervalsByErrorRate
+        self.octaveMatters = octaveMatters
+        self.useOnScreenKeyboard = useOnScreenKeyboard
         self.currentSettingsProvider = currentSettingsProvider
         self.schedulingCoordinator = schedulingCoordinator
         bindMIDI()
@@ -191,13 +191,9 @@ final class PracticeEngine: ObservableObject {
     }
 
     private func handleReplayHotkey(noteNumber: UInt8) -> Bool {
-        guard replayHotkeyEnabled() else { return false }
-        // A0 on an 88-key keyboard is MIDI note 21; use as replay hotkey.
-        if noteNumber == 21 {
-            replay()
-            return true
-        }
-        return false
+        guard let hotkeyNote = replayHotkeyNote(), noteNumber == hotkeyNote else { return false }
+        replay()
+        return true
     }
 
     private func handle(noteOn noteNumber: UInt8) {
@@ -206,7 +202,13 @@ final class PracticeEngine: ObservableObject {
         guard currentInputIndex < sequence.notes.count else { return }
 
         let expectedNote = sequence.notes[currentInputIndex]
-        let isCorrect = noteNumber == expectedNote.midiNoteNumber
+        let shouldIgnoreOctave = useOnScreenKeyboard() || !octaveMatters()
+        let isCorrect: Bool
+        if shouldIgnoreOctave {
+            isCorrect = (noteNumber % 12) == (expectedNote.midiNoteNumber % 12)
+        } else {
+            isCorrect = noteNumber == expectedNote.midiNoteNumber
+        }
         let scale = Scale(key: sequence.key, type: sequence.scaleType)
 
         let descriptor = scoringService.descriptor(
@@ -267,9 +269,6 @@ final class PracticeEngine: ObservableObject {
                 if self.madeErrorInCurrentAttempt {
                     self.replayCurrentSequence(sequence: sequence, settings: settings)
                 } else {
-                    self.feedbackService.channel = self.melodyMIDIChannel()
-                    self.feedbackService.playSequenceSuccess(for: sequence.key, settings: self.feedbackSettings())
-                    // Use fresh settings from provider to pick up any changes made during practice
                     let freshSettings = self.currentSettingsProvider()
                     self.playQuestion(settings: freshSettings)
                 }

@@ -117,27 +117,12 @@ struct RealMelodySource: MelodySource {
             degreeAndOctaveShifts.append((degree, octaveShift))
         }
 
-        // Find the range of octave shifts in the phrase
-        let minShift = degreeAndOctaveShifts.map(\.octaveShift).min() ?? 0
-        let maxShift = degreeAndOctaveShifts.map(\.octaveShift).max() ?? 0
-        let phraseOctaveSpan = maxShift - minShift
-
-        // Find valid starting octaves where the entire phrase fits
-        let minAllowedOctave = allowedOctaves.min()!
-        let maxAllowedOctave = allowedOctaves.max()!
-        let allowedOctaveSpan = maxAllowedOctave - minAllowedOctave
-
-        // The phrase must fit within the allowed octave range
-        guard phraseOctaveSpan <= allowedOctaveSpan else {
-            return nil
-        }
-
-        // Find all valid starting octaves
+        // Find all valid starting octaves where ALL resulting octaves are in allowedOctaves
+        let allowedOctaveSet = Set(allowedOctaves)
         var validStartOctaves: [Int] = []
         for startOctave in allowedOctaves {
-            let lowestOctave = startOctave + minShift
-            let highestOctave = startOctave + maxShift
-            if lowestOctave >= minAllowedOctave && highestOctave <= maxAllowedOctave {
+            let resultingOctaves = Set(degreeAndOctaveShifts.map { startOctave + $0.octaveShift })
+            if resultingOctaves.isSubset(of: allowedOctaveSet) {
                 validStartOctaves.append(startOctave)
             }
         }

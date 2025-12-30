@@ -114,11 +114,13 @@ final class MelodyLibrary {
             let phrases = rawPhrases.compactMap { raw -> MelodyPhrase? in
                 guard raw.intervals.count == raw.durations.count else { return nil }
                 guard !raw.intervals.isEmpty else { return nil }
-                return MelodyPhrase(
+                let phrase = MelodyPhrase(
                     intervals: raw.intervals,
                     durations: raw.durations,
                     sourceId: raw.sourceId
                 )
+                guard phrase.hasVariety else { return nil }
+                return phrase
             }
 
             phrasesByLength[length] = phrases
@@ -170,6 +172,8 @@ final class MelodyLibrary {
                     durations: raw.durations,
                     sourceId: raw.sourceId
                 )
+
+                guard melody.hasVariety else { return nil }
 
                 let chords = (raw.chords ?? []).map { chord in
                     PhraseChordEvent(offset: chord.offset, chord: chord.chord, bass: chord.bass)

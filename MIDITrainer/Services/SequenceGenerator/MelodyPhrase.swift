@@ -21,6 +21,12 @@ struct MelodyPhrase: Codable, Equatable {
     /// Total duration in beats.
     var totalBeats: Double { durations.reduce(0, +) }
 
+    /// Whether the phrase has melodic variety (not all the same note).
+    var hasVariety: Bool {
+        guard intervals.count > 1 else { return true }
+        return intervals.contains { $0 != intervals[0] }
+    }
+
     init(intervals: [Int], durations: [Double], sourceId: String? = nil) {
         precondition(intervals.count == durations.count, "Intervals and durations must have same count")
         precondition(!intervals.isEmpty, "Phrase must have at least one note")

@@ -5,6 +5,7 @@ struct ActionBarView: View {
     let isPlaying: Bool
     let midiDeviceName: String?
     let isMidiConnected: Bool
+    let isScanningMIDI: Bool
     let onAction: () -> Void
     let onSkip: () -> Void
     let onMidiSettingsTap: () -> Void
@@ -17,18 +18,25 @@ struct ActionBarView: View {
                     Image(systemName: "pianokeys")
                         .font(.subheadline)
 
-                    if let deviceName = midiDeviceName {
+                    if isScanningMIDI {
+                        Text("Scanning...")
+                            .font(.subheadline)
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    } else if let deviceName = midiDeviceName {
                         Text(deviceName)
                             .font(.subheadline)
                             .lineLimit(1)
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 8, height: 8)
                     } else {
                         Text("No MIDI device")
                             .font(.subheadline)
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 8, height: 8)
                     }
-
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 8, height: 8)
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
@@ -120,18 +128,20 @@ struct ActionBarView: View {
         ActionBarView(
             hasSequence: false,
             isPlaying: false,
-            midiDeviceName: "Roland FP-30X",
-            isMidiConnected: true,
+            midiDeviceName: nil,
+            isMidiConnected: false,
+            isScanningMIDI: true,
             onAction: {},
             onSkip: {},
             onMidiSettingsTap: {}
         )
 
         ActionBarView(
-            hasSequence: true,
+            hasSequence: false,
             isPlaying: false,
             midiDeviceName: "Roland FP-30X",
             isMidiConnected: true,
+            isScanningMIDI: false,
             onAction: {},
             onSkip: {},
             onMidiSettingsTap: {}
@@ -142,6 +152,7 @@ struct ActionBarView: View {
             isPlaying: true,
             midiDeviceName: nil,
             isMidiConnected: false,
+            isScanningMIDI: false,
             onAction: {},
             onSkip: {},
             onMidiSettingsTap: {}

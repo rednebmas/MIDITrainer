@@ -10,7 +10,7 @@ final class MistakeQueueRepository {
     }
     
     /// Inserts a new mistake into the queue and returns its ID.
-    func insert(seed: UInt64, settings: PracticeSettingsSnapshot, now: Date = Date()) throws -> QueuedMistake {
+    func insert(seed: UInt64, settings: PracticeSettingsSnapshot, clearance: Int = 3, now: Date = Date()) throws -> QueuedMistake {
         try db.readWrite { handle in
             let sql = """
             INSERT INTO mistake_queue (seed, settingsJson, clearanceDistance, currentClearanceDistance, questionsSinceQueued, queuedAt)
@@ -21,29 +21,29 @@ final class MistakeQueueRepository {
                 throw DatabaseError.statementFailed(message: "Failed to prepare mistake_queue insert")
             }
             defer { sqlite3_finalize(statement) }
-            
+
             sqlite3_bind_int64(statement, 1, Int64(bitPattern: seed))
-            
+
             let encoder = JSONEncoder()
             let settingsData = try encoder.encode(settings)
             let settingsJson = String(data: settingsData, encoding: .utf8) ?? "{}"
             sqlite3_bind_text(statement, 2, settingsJson, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_int(statement, 3, Int32(QueuedMistake.initialClearanceDistance))
-            sqlite3_bind_int(statement, 4, Int32(QueuedMistake.initialClearanceDistance))
+            sqlite3_bind_int(statement, 3, Int32(clearance))
+            sqlite3_bind_int(statement, 4, Int32(clearance))
             sqlite3_bind_int(statement, 5, 0)
             sqlite3_bind_double(statement, 6, now.timeIntervalSince1970)
-            
+
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw DatabaseError.statementFailed(message: "Failed to insert mistake_queue")
             }
-            
+
             let id = sqlite3_last_insert_rowid(handle)
             return QueuedMistake(
                 id: id,
                 seed: seed,
                 settings: settings,
-                minimumClearanceDistance: QueuedMistake.initialClearanceDistance,
-                currentClearanceDistance: QueuedMistake.initialClearanceDistance,
+                minimumClearanceDistance: clearance,
+                currentClearanceDistance: clearance,
                 questionsSinceQueued: 0,
                 queuedAt: now
             )

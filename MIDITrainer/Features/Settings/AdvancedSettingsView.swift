@@ -68,6 +68,14 @@ struct AdvancedSettingsView: View {
             } footer: {
                 Text("Set different channels to route melody and chords to separate sounds on your synthesizer.")
             }
+
+            Section {
+                Stepper("Clearance: \(settingsStore.spacedMistakeClearance)", value: $settingsStore.spacedMistakeClearance, in: 1...20)
+            } header: {
+                Text("Spaced Repetition")
+            } footer: {
+                Text("Number of fresh questions before a mistake is re-asked. Higher values mean less frequent repetition.")
+            }
         }
         .navigationTitle("Advanced")
         .navigationBarTitleDisplayMode(.inline)

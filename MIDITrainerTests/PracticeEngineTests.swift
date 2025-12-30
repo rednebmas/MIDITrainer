@@ -17,7 +17,10 @@ final class MockMIDIService: MIDIService {
     var selectedOutputPublisher: AnyPublisher<MIDIEndpoint?, Never> {
         Just(nil).eraseToAnyPublisher()
     }
-    
+    var isScanningPublisher: AnyPublisher<Bool, Never> {
+        Just(false).eraseToAnyPublisher()
+    }
+
     private let noteSubject = PassthroughSubject<MIDINoteEvent, Never>()
     var noteEvents: AnyPublisher<MIDINoteEvent, Never> {
         noteSubject.eraseToAnyPublisher()
@@ -59,13 +62,6 @@ final class MockPlaybackScheduler {
     }
 }
 
-final class MockFeedbackService {
-    var successPlayedCount = 0
-    
-    func playSequenceSuccess(for key: Key, settings: FeedbackSettings) {
-        successPlayedCount += 1
-    }
-}
 
 // MARK: - Testable PracticeEngine
 
@@ -79,10 +75,9 @@ final class TestablePracticeEngine {
     }
     
     private(set) var state: State = .idle
-    
+
     private let midiService: MockMIDIService
     private let playbackScheduler: MockPlaybackScheduler
-    private let feedbackService: MockFeedbackService
     private let sequenceGenerator: SequenceGenerator
     private let scoringService: ScoringService
     private var cancellables: Set<AnyCancellable> = []
@@ -101,15 +96,13 @@ final class TestablePracticeEngine {
     
     init(
         midiService: MockMIDIService = MockMIDIService(),
-        playbackScheduler: MockPlaybackScheduler = MockPlaybackScheduler(),
-        feedbackService: MockFeedbackService = MockFeedbackService()
+        playbackScheduler: MockPlaybackScheduler = MockPlaybackScheduler()
     ) {
         self.midiService = midiService
         self.playbackScheduler = playbackScheduler
-        self.feedbackService = feedbackService
         self.sequenceGenerator = SequenceGenerator()
         self.scoringService = ScoringService()
-        
+
         bindMIDI()
     }
     
@@ -196,15 +189,11 @@ final class TestablePracticeEngine {
     
     private func handleSequenceCompleted(sequence: MelodySequence) {
         state = .completed(sequence)
-        
+
         if madeErrorInCurrentSequence {
             autoReplayCount += 1
-            // In real engine, this would trigger replay after delay
-            // For testing, we just track the count
         } else {
-            feedbackService.successPlayedCount += 1
             autoAdvanceCount += 1
-            // In real engine, this would trigger next question after delay
         }
     }
     

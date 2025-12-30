@@ -44,6 +44,8 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var schedulerMode: SchedulerMode = .spacedMistakes
     @Published private(set) var weaknessDebugEntries: [WeaknessEntry] = []
     @Published private(set) var showChordSymbols: Bool = true
+    @Published private(set) var showNoteOrbs: Bool = true
+    @Published private(set) var isScanningMIDI: Bool = true
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -71,7 +73,6 @@ final class PracticeModel: ObservableObject {
             useSamples: { [weak settingsStore] in settingsStore?.useOnScreenKeyboard ?? initialUseOnScreenKeyboard },
             volumeProvider: { [weak settingsStore] in settingsStore?.midiOutputVolume ?? initialVolume }
         )
-        let feedbackService = FeedbackService(midiService: midiService)
 
         let database: Database
         do {
@@ -93,6 +94,7 @@ final class PracticeModel: ObservableObject {
             repository: mistakeQueueRepo,
             statsRepository: self.statsRepository,
             weaknessMatchExactSettings: { settingsStore.weaknessMatchExactSettings },
+            spacedMistakeClearance: { settingsStore.spacedMistakeClearance },
             onModeChange: { newMode in
                 settingsStore.schedulerMode = newMode
             }
@@ -103,14 +105,12 @@ final class PracticeModel: ObservableObject {
             sequenceGenerator: sequenceGenerator,
             playbackScheduler: playbackScheduler,
             scoringService: ScoringService(),
-            feedbackService: feedbackService,
             settingsRepository: settingsRepo,
             sessionRepository: sessionRepo,
             sequenceRepository: sequenceRepo,
             attemptRepository: attemptRepo,
             statsRepository: self.statsRepository,
-            feedbackSettings: { settingsStore.feedback },
-            replayHotkeyEnabled: { settingsStore.replayHotkeyEnabled },
+            replayHotkeyNote: { settingsStore.replayHotkeyNote },
             chordAccompanimentEnabled: { settingsStore.chordAccompanimentEnabled },
             chordLoopDuringInput: { settingsStore.chordLoopDuringInput },
             chordVoicingStyle: { settingsStore.chordVoicingStyle },
@@ -118,6 +118,8 @@ final class PracticeModel: ObservableObject {
             melodyMIDIChannel: { settingsStore.melodyMIDIChannel },
             chordMIDIChannel: { settingsStore.chordMIDIChannel },
             weightIntervalsByErrorRate: { settingsStore.weightIntervalsByErrorRate },
+            octaveMatters: { settingsStore.octaveMatters },
+            useOnScreenKeyboard: { settingsStore.useOnScreenKeyboard },
             currentSettingsProvider: { settingsStore.settings },
             schedulingCoordinator: schedulingCoordinator
         )
@@ -150,8 +152,9 @@ final class PracticeModel: ObservableObject {
             selectedOutputName = "On-Screen Keyboard"
         }
 
-        // Initialize chord display state
+        // Initialize display state
         showChordSymbols = settingsStore.showChordSymbols
+        showNoteOrbs = settingsStore.showNoteOrbs
 
         bind()
         bindStats()
@@ -179,6 +182,11 @@ final class PracticeModel: ObservableObject {
         settingsStore.$showChordSymbols
             .receive(on: DispatchQueue.main)
             .assign(to: \.showChordSymbols, on: self)
+            .store(in: &cancellables)
+
+        settingsStore.$showNoteOrbs
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.showNoteOrbs, on: self)
             .store(in: &cancellables)
     }
 
@@ -267,6 +275,7 @@ final class PracticeModel: ObservableObject {
     }
 
     func refreshEndpoints() {
+        print("[MIDI] PracticeModel.refreshEndpoints() called")
         midiService.refreshEndpoints()
     }
 
@@ -309,28 +318,38 @@ final class PracticeModel: ObservableObject {
         playQuestion()
     }
 
-    /// Attempts to auto-select the last used MIDI output if no output is currently selected
     private func autoSelectLastOutputIfNeeded(outputs: [MIDIEndpoint]) {
-        // Only auto-select if we don't already have a selection
-        guard selectedOutputID == nil, !outputs.isEmpty else { return }
+        print("[MIDI] autoSelectLastOutputIfNeeded() called with \(outputs.count) outputs")
+        print("[MIDI]   Current selectedOutputID: \(String(describing: selectedOutputID))")
+        print("[MIDI]   Saved lastSelectedOutputID: \(String(describing: settingsStore.lastSelectedOutputID))")
+        print("[MIDI]   Saved lastSelectedOutputName: \(String(describing: settingsStore.lastSelectedOutputName))")
+        for output in outputs {
+            print("[MIDI]   Available: '\(output.name)' id=\(output.id) offline=\(output.isOffline)")
+        }
 
-        // Try to match by ID first (most reliable), but skip offline devices
+        guard selectedOutputID == nil, !outputs.isEmpty else {
+            print("[MIDI]   Skipping: selectedOutputID=\(String(describing: selectedOutputID)), outputs.isEmpty=\(outputs.isEmpty)")
+            return
+        }
+
         if let lastID = settingsStore.lastSelectedOutputID,
            let matchingEndpoint = outputs.first(where: { $0.id == lastID && !$0.isOffline }) {
+            print("[MIDI]   Matched by ID: '\(matchingEndpoint.name)'")
             midiService.selectOutput(matchingEndpoint)
             connectMatchingInput(for: matchingEndpoint)
             return
         }
 
-        // Fall back to matching by name (Bluetooth devices may get new IDs), skip offline
         if let lastName = settingsStore.lastSelectedOutputName,
            let matchingEndpoint = outputs.first(where: { $0.name == lastName && !$0.isOffline }) {
+            print("[MIDI]   Matched by name: '\(matchingEndpoint.name)'")
             midiService.selectOutput(matchingEndpoint)
             connectMatchingInput(for: matchingEndpoint)
-            // Update the stored ID to the new one
             settingsStore.lastSelectedOutputID = matchingEndpoint.id
             return
         }
+
+        print("[MIDI]   No match found")
     }
 
     private func bind() {
@@ -348,6 +367,7 @@ final class PracticeModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] outputs in
                 guard let self else { return }
+                print("[MIDI] availableOutputsPublisher received \(outputs.count) outputs")
                 self.availableOutputs = outputs
                 self.autoSelectLastOutputIfNeeded(outputs: outputs)
             }
@@ -359,6 +379,11 @@ final class PracticeModel: ObservableObject {
                 self?.selectedOutputID = endpoint?.id
                 self?.selectedOutputName = endpoint?.name
             }
+            .store(in: &cancellables)
+
+        midiService.isScanningPublisher
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.isScanningMIDI, on: self)
             .store(in: &cancellables)
 
         engine.$state

@@ -7,8 +7,20 @@ struct NoteOrbsContainerView: View {
     let firstNoteName: String?
     let sourceName: String?
     let showChordSymbols: Bool
+    let showOrbs: Bool
+    let isPlaying: Bool
+    let isReplaying: Bool
 
     @SwiftUI.State private var appearingOrbs: Set<Int> = []
+
+    private var statusText: String {
+        guard sequence != nil else { return "Press Start to begin" }
+        if isPlaying {
+            return isReplaying ? "Replaying..." : "Playing..."
+        } else {
+            return "Your turn..."
+        }
+    }
 
     /// Returns a formatted string of all chord symbols for display
     private var chordSymbolsText: String? {
@@ -30,18 +42,25 @@ struct NoteOrbsContainerView: View {
     var body: some View {
         VStack(spacing: 24) {
             if let sequence = sequence {
-                HStack(spacing: 16) {
-                    ForEach(Array(sequence.notes.enumerated()), id: \.offset) { index, _ in
-                        NoteOrbView(state: orbState(for: index), index: index)
-                            .opacity(appearingOrbs.contains(index) ? 1 : 0)
-                            .scaleEffect(appearingOrbs.contains(index) ? 1 : 0.5)
+                if showOrbs {
+                    HStack(spacing: 16) {
+                        ForEach(Array(sequence.notes.enumerated()), id: \.offset) { index, _ in
+                            NoteOrbView(state: orbState(for: index), index: index)
+                                .opacity(appearingOrbs.contains(index) ? 1 : 0)
+                                .scaleEffect(appearingOrbs.contains(index) ? 1 : 0.5)
+                        }
                     }
-                }
-                .onChange(of: sequence.seed) { _, _ in
-                    animateOrbsAppearance(count: sequence.notes.count)
-                }
-                .onAppear {
-                    animateOrbsAppearance(count: sequence.notes.count)
+                    .onChange(of: sequence.seed) { _, _ in
+                        animateOrbsAppearance(count: sequence.notes.count)
+                    }
+                    .onAppear {
+                        animateOrbsAppearance(count: sequence.notes.count)
+                    }
+                } else {
+                    Text(statusText)
+                        .font(.title2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
                 }
 
                 VStack(spacing: 4) {
@@ -138,6 +157,9 @@ struct NoteOrbsContainerView: View {
         errorIndex: nil,
         firstNoteName: nil,
         sourceName: nil,
-        showChordSymbols: true
+        showChordSymbols: true,
+        showOrbs: true,
+        isPlaying: false,
+        isReplaying: false
     )
 }

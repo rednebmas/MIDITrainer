@@ -15,11 +15,17 @@ import Foundation
 /// - currentClearanceDistance: the immediate spacing before the next re-ask (resets to 3 on failure, pushed to min on success).
 final class SpacedMistakeScheduler: QuestionScheduler {
     private let repository: MistakeQueueRepository
+    private let clearanceProvider: () -> Int
     private var queue: [QueuedMistake] = []
-    
-    init(repository: MistakeQueueRepository) {
+
+    init(repository: MistakeQueueRepository, clearanceProvider: @escaping () -> Int = { 3 }) {
         self.repository = repository
+        self.clearanceProvider = clearanceProvider
         loadQueue()
+    }
+
+    private var clearance: Int {
+        max(1, clearanceProvider())
     }
     
     private func loadQueue() {
@@ -27,16 +33,16 @@ final class SpacedMistakeScheduler: QuestionScheduler {
             queue = try repository.loadAll().map { queued in
                 var adjusted = queued
                 var needsUpdate = false
-                
-                if adjusted.minimumClearanceDistance < QueuedMistake.initialClearanceDistance {
-                    adjusted.minimumClearanceDistance = QueuedMistake.initialClearanceDistance
+
+                if adjusted.minimumClearanceDistance < clearance {
+                    adjusted.minimumClearanceDistance = clearance
                     needsUpdate = true
                 }
                 if adjusted.currentClearanceDistance < adjusted.minimumClearanceDistance {
                     adjusted.currentClearanceDistance = adjusted.minimumClearanceDistance
                     needsUpdate = true
                 }
-                
+
                 if needsUpdate {
                     do {
                         try repository.update(
@@ -49,7 +55,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                         // Log error but continue with adjusted in-memory state
                     }
                 }
-                
+
                 return adjusted
             }
         } catch {
@@ -93,7 +99,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         // If the fresh question had errors, add it to the queue
         if hadErrors {
             do {
-                let mistake = try repository.insert(seed: seed, settings: settings)
+                let mistake = try repository.insert(seed: seed, settings: settings, clearance: clearance)
                 queue.append(mistake)
             } catch {
                 // Log error but continue
@@ -103,12 +109,12 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     
     private func handleReaskCompletion(mistakeId: Int64, hadErrors: Bool) {
         guard let index = queue.firstIndex(where: { $0.id == mistakeId }) else { return }
-        
+
         if hadErrors {
-            // Failed the re-ask: bump minimum clearance by 3, reset current to initial so they see it again soon
+            // Failed the re-ask: bump minimum clearance, reset current to clearance so they see it again soon
             var mistake = queue[index]
-            mistake.minimumClearanceDistance += QueuedMistake.clearanceIncrement
-            mistake.currentClearanceDistance = QueuedMistake.initialClearanceDistance
+            mistake.minimumClearanceDistance += clearance
+            mistake.currentClearanceDistance = clearance
             mistake.questionsSinceQueued = 0
             queue[index] = mistake
             

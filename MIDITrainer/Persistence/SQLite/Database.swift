@@ -143,6 +143,9 @@ extension Database {
             ]),
             Migration(version: 3, statements: [
                 "ALTER TABLE mistake_queue ADD COLUMN currentClearanceDistance INTEGER NOT NULL DEFAULT \(initialClearance);"
+            ]),
+            Migration(version: 4, statements: [
+                "ALTER TABLE melody_sequence ADD COLUMN sourceId TEXT;"
             ])
         ]
     }()

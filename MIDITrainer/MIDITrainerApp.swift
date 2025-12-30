@@ -11,6 +11,7 @@ import SwiftUI
 struct MIDITrainerApp: App {
     @StateObject private var midiService = CoreMIDIAdapter()
     @StateObject private var settingsStore = SettingsStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -23,6 +24,12 @@ struct MIDITrainerApp: App {
                 .onDisappear {
                     midiService.stop()
                 }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                print("[MIDI] App became active - refreshing endpoints")
+                midiService.refreshEndpoints()
+            }
         }
     }
 }

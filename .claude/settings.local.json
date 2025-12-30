@@ -20,7 +20,17 @@
       "WebFetch(domain:www.manua.ls)",
       "WebFetch(domain:www.nordkeyboards.com)",
       "WebFetch(domain:manualzz.com)",
-      "WebFetch(domain:manuals.plus)"
+      "WebFetch(domain:manuals.plus)",
+      "Bash(mkdir:*)",
+      "Bash(fastlane beta:*)",
+      "Bash(xcrun simctl list:*)",
+      "Bash(xcrun simctl shutdown:*)",
+      "Bash(xcrun simctl boot:*)",
+      "Bash(xcrun simctl io:*)",
+      "Bash(xcrun simctl install:*)",
+      "Bash(xcrun simctl launch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

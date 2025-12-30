@@ -7,6 +7,7 @@ protocol MIDIService: AnyObject {
     var connectedInputsPublisher: AnyPublisher<[MIDIEndpoint], Never> { get }
     var availableOutputsPublisher: AnyPublisher<[MIDIEndpoint], Never> { get }
     var selectedOutputPublisher: AnyPublisher<MIDIEndpoint?, Never> { get }
+    var isScanningPublisher: AnyPublisher<Bool, Never> { get }
     var noteEvents: AnyPublisher<MIDINoteEvent, Never> { get }
 
     func start()

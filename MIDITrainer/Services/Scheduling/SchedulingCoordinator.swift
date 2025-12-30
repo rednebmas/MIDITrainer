@@ -20,11 +20,12 @@ final class SchedulingCoordinator: ObservableObject {
         repository: MistakeQueueRepository,
         statsRepository: StatsRepository,
         weaknessMatchExactSettings: @escaping () -> Bool = { false },
+        spacedMistakeClearance: @escaping () -> Int = { 3 },
         onModeChange: @escaping (SchedulerMode) -> Void
     ) {
         self.mode = initialMode
         self.onModeChange = onModeChange
-        self.spacedScheduler = SpacedMistakeScheduler(repository: repository)
+        self.spacedScheduler = SpacedMistakeScheduler(repository: repository, clearanceProvider: spacedMistakeClearance)
         self.weaknessScheduler = WeaknessFocusedScheduler(
             spacedScheduler: spacedScheduler,
             statsRepository: statsRepository,

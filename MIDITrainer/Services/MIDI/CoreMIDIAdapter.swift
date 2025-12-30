@@ -2,19 +2,27 @@ import Combine
 import CoreMIDI
 import Foundation
 
+private func midiNotifyCallback(notification: UnsafePointer<MIDINotification>, refCon: UnsafeMutableRawPointer?) {
+    print("[MIDI] midiNotifyCallback")
+    guard let refCon = refCon else { return }
+    let adapter = Unmanaged<CoreMIDIAdapter>.fromOpaque(refCon).takeUnretainedValue()
+    adapter.handleNotification(notification)
+}
+
 final class CoreMIDIAdapter: ObservableObject, MIDIService {
     @Published private(set) var availableInputs: [MIDIEndpoint] = []
     @Published private(set) var connectedInputs: [MIDIEndpoint] = []
     @Published private(set) var availableOutputs: [MIDIEndpoint] = []
     @Published private(set) var selectedOutput: MIDIEndpoint?
+    @Published private(set) var isScanning: Bool = true
 
     var availableInputsPublisher: AnyPublisher<[MIDIEndpoint], Never> { $availableInputs.eraseToAnyPublisher() }
     var connectedInputsPublisher: AnyPublisher<[MIDIEndpoint], Never> { $connectedInputs.eraseToAnyPublisher() }
     var availableOutputsPublisher: AnyPublisher<[MIDIEndpoint], Never> { $availableOutputs.eraseToAnyPublisher() }
     var selectedOutputPublisher: AnyPublisher<MIDIEndpoint?, Never> { $selectedOutput.eraseToAnyPublisher() }
+    var isScanningPublisher: AnyPublisher<Bool, Never> { $isScanning.eraseToAnyPublisher() }
     var noteEvents: AnyPublisher<MIDINoteEvent, Never> { noteSubject.eraseToAnyPublisher() }
 
-    private let midiQueue = DispatchQueue(label: "com.sambender.miditrainer.midi")
     private let noteSubject = PassthroughSubject<MIDINoteEvent, Never>()
 
     private var client = MIDIClientRef()
@@ -28,63 +36,45 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
     private var desiredInputIDs: Set<MIDIUniqueID> = []
 
     func start() {
-        midiQueue.async { [weak self] in
-            guard let self else { return }
-            createClientIfNeeded()
-            refreshEndpoints()
-        }
+        print("[MIDI] start() called")
+        createClientIfNeeded()
+        refreshEndpointsInternal()
     }
 
     func stop() {
-        midiQueue.async { [weak self] in
-            guard let self else { return }
-            disconnectAllSources()
-            selectedOutputID = nil
-        }
+        disconnectAllSources()
+        selectedOutputID = nil
     }
 
     func restart() {
-        midiQueue.async { [weak self] in
-            guard let self else { return }
-            disconnectAllSources()
-            desiredInputIDs.removeAll()
-            selectedOutputID = nil
-            refreshEndpointsInternal()
-        }
+        disconnectAllSources()
+        desiredInputIDs.removeAll()
+        selectedOutputID = nil
+        refreshEndpointsInternal()
     }
 
     func refreshEndpoints() {
-        midiQueue.async { [weak self] in
-            self?.refreshEndpointsInternal()
-        }
+        print("[MIDI] refreshEndpoints() called")
+        refreshEndpointsInternal()
     }
 
     func selectOutput(_ endpoint: MIDIEndpoint?) {
-        midiQueue.async { [weak self] in
-            guard let self else { return }
-            selectedOutputID = endpoint?.id
-            updatePublishedState()
-        }
+        selectedOutputID = endpoint?.id
+        updatePublishedState()
     }
 
     func connectInput(_ endpoint: MIDIEndpoint) {
-        midiQueue.async { [weak self] in
-            guard let self else { return }
-            desiredInputIDs.insert(endpoint.id)
-            refreshEndpoints()
-        }
+        desiredInputIDs.insert(endpoint.id)
+        refreshEndpointsInternal()
     }
 
     func disconnectInput(_ endpoint: MIDIEndpoint) {
-        midiQueue.async { [weak self] in
-            guard let self else { return }
-            desiredInputIDs.remove(endpoint.id)
-            if let ref = sourceRefs[endpoint.id] {
-                MIDIPortDisconnectSource(inputPort, ref)
-            }
-            connectedSourceIDs.remove(endpoint.id)
-            updatePublishedState()
+        desiredInputIDs.remove(endpoint.id)
+        if let ref = sourceRefs[endpoint.id] {
+            MIDIPortDisconnectSource(inputPort, ref)
         }
+        connectedSourceIDs.remove(endpoint.id)
+        updatePublishedState()
     }
 
     func send(noteOn noteNumber: UInt8, velocity: UInt8, channel: Int) {
@@ -102,38 +92,54 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
     }
 
     private func sendMessage(_ bytes: [UInt8]) {
-        midiQueue.async { [weak self] in
-            guard
-                let self,
-                let selectedOutputID,
-                let destination = destinationRefs[selectedOutputID]
-            else { return }
+        guard
+            let selectedOutputID,
+            let destination = destinationRefs[selectedOutputID]
+        else { return }
 
-            var packetList = MIDIPacketList()
-            let packet = MIDIPacketListInit(&packetList)
-            let timestamp: MIDITimeStamp = 0
-            MIDIPacketListAdd(&packetList, 1024, packet, timestamp, bytes.count, bytes)
-            MIDISend(self.outputPort, destination, &packetList)
-        }
+        var packetList = MIDIPacketList()
+        let packet = MIDIPacketListInit(&packetList)
+        let timestamp: MIDITimeStamp = 0
+        MIDIPacketListAdd(&packetList, 1024, packet, timestamp, bytes.count, bytes)
+        MIDISend(outputPort, destination, &packetList)
     }
 
     private func createClientIfNeeded() {
-        guard client == 0 else { return }
-
-        MIDIClientCreateWithBlock("MIDITrainerClient" as CFString, &client) { [weak self] notificationPointer in
-            self?.handle(notification: notificationPointer.pointee)
+        guard client == 0 else {
+            print("[MIDI] createClientIfNeeded() - client already exists")
+            return
         }
 
-        MIDIInputPortCreateWithBlock(client, "MIDITrainerInput" as CFString, &inputPort) { [weak self] packetList, _ in
+        print("[MIDI] createClientIfNeeded() - creating new MIDI client with C-style callback")
+        let refCon = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        let clientStatus = MIDIClientCreate(
+            "MIDITrainerClient" as CFString,
+            midiNotifyCallback,
+            refCon,
+            &client
+        )
+        print("[MIDI] MIDIClientCreate status: \(clientStatus) (0 = success)")
+
+        let inputStatus = MIDIInputPortCreateWithBlock(client, "MIDITrainerInput" as CFString, &inputPort) { [weak self] packetList, _ in
             self?.handlePacketList(packetList)
         }
+        print("[MIDI] MIDIInputPortCreateWithBlock status: \(inputStatus)")
 
-        MIDIOutputPortCreate(client, "MIDITrainerOutput" as CFString, &outputPort)
+        let outputStatus = MIDIOutputPortCreate(client, "MIDITrainerOutput" as CFString, &outputPort)
+        print("[MIDI] MIDIOutputPortCreate status: \(outputStatus)")
     }
 
     private func refreshEndpointsInternal() {
         let sources = collectSources()
         let destinations = collectDestinations()
+
+        print("[MIDI] refreshEndpointsInternal() - Found \(sources.count) sources, \(destinations.count) destinations")
+        for source in sources {
+            print("[MIDI]   Source: '\(source.info.name)' id=\(source.info.id) offline=\(source.info.isOffline)")
+        }
+        for dest in destinations {
+            print("[MIDI]   Destination: '\(dest.info.name)' id=\(dest.info.id) offline=\(dest.info.isOffline)")
+        }
 
         sourceRefs = Dictionary(uniqueKeysWithValues: sources.map { ($0.info.id, $0.ref) })
         destinationRefs = Dictionary(uniqueKeysWithValues: destinations.map { ($0.info.id, $0.ref) })
@@ -146,12 +152,13 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
         let connectedInputs = sources.compactMap { connectedSourceIDs.contains($0.info.id) ? $0.info : nil }
         let availableOutputs = destinations.map(\.info)
 
-        DispatchQueue.main.async { [weak self] in
-            self?.availableInputs = availableInputs
-            self?.connectedInputs = connectedInputs
-            self?.availableOutputs = availableOutputs
-            self?.selectedOutput = availableOutputs.first(where: { $0.id == self?.selectedOutputID })
-        }
+        print("[MIDI] Publishing: \(availableInputs.count) inputs, \(connectedInputs.count) connected, \(availableOutputs.count) outputs, selectedID=\(String(describing: selectedOutputID))")
+
+        self.availableInputs = availableInputs
+        self.connectedInputs = connectedInputs
+        self.availableOutputs = availableOutputs
+        self.selectedOutput = availableOutputs.first(where: { $0.id == selectedOutputID })
+        self.isScanning = false
     }
 
     private func reconnect(to sources: [EndpointHandle]) {
@@ -178,24 +185,19 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
     private func seedDesiredInputsIfNeeded(from sources: [EndpointHandle]) {}
 
     private func updateSelectionIfNeeded(destinations: [MIDIEndpoint]) {
-        // Check if current selection is still valid and online
-        if let selectedOutputID,
-           let selectedDevice = destinations.first(where: { $0.id == selectedOutputID }),
+        guard let currentID = selectedOutputID else { return }
+
+        if let selectedDevice = destinations.first(where: { $0.id == currentID }),
            !selectedDevice.isOffline {
             return
         }
 
-        // Clear selection if device is missing or offline; select first online device if available
-        selectedOutputID = destinations.first(where: { !$0.isOffline })?.id
+        selectedOutputID = nil
         updatePublishedState()
     }
 
     private func updatePublishedState() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            let selected = self.availableOutputs.first(where: { $0.id == self.selectedOutputID })
-            self.selectedOutput = selected
-        }
+        selectedOutput = availableOutputs.first(where: { $0.id == selectedOutputID })
     }
 
     private func disconnectAllSources() {
@@ -205,10 +207,7 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
             }
         }
         connectedSourceIDs.removeAll()
-
-        DispatchQueue.main.async { [weak self] in
-            self?.connectedInputs = []
-        }
+        connectedInputs = []
     }
 
     private func collectSources() -> [EndpointHandle] {
@@ -263,12 +262,48 @@ final class CoreMIDIAdapter: ObservableObject, MIDIService {
         return cfString as String
     }
 
-    private func handle(notification: MIDINotification) {
+    func handleNotification(_ notificationPtr: UnsafePointer<MIDINotification>) {
+        let notification = notificationPtr.pointee
+        print("[MIDI] Notification received: \(notification.messageID.rawValue) (\(notificationName(notification.messageID)))")
+
         switch notification.messageID {
-        case .msgObjectAdded, .msgObjectRemoved, .msgPropertyChanged:
-            refreshEndpoints()
+        case .msgObjectAdded:
+            let addNotification = notificationPtr.withMemoryRebound(to: MIDIObjectAddRemoveNotification.self, capacity: 1) { $0.pointee }
+            print("[MIDI]   Object added - childType: \(addNotification.childType)")
+            DispatchQueue.main.async { [weak self] in
+                self?.refreshEndpoints()
+            }
+        case .msgObjectRemoved:
+            let removeNotification = notificationPtr.withMemoryRebound(to: MIDIObjectAddRemoveNotification.self, capacity: 1) { $0.pointee }
+            print("[MIDI]   Object removed - childType: \(removeNotification.childType)")
+            DispatchQueue.main.async { [weak self] in
+                self?.refreshEndpoints()
+            }
+        case .msgPropertyChanged:
+            print("[MIDI]   Property changed - triggering refresh")
+            DispatchQueue.main.async { [weak self] in
+                self?.refreshEndpoints()
+            }
+        case .msgSetupChanged:
+            print("[MIDI]   Setup changed - triggering refresh")
+            DispatchQueue.main.async { [weak self] in
+                self?.refreshEndpoints()
+            }
         default:
             break
+        }
+    }
+
+    private func notificationName(_ id: MIDINotificationMessageID) -> String {
+        switch id {
+        case .msgSetupChanged: return "setupChanged"
+        case .msgObjectAdded: return "objectAdded"
+        case .msgObjectRemoved: return "objectRemoved"
+        case .msgPropertyChanged: return "propertyChanged"
+        case .msgThruConnectionsChanged: return "thruConnectionsChanged"
+        case .msgSerialPortOwnerChanged: return "serialPortOwnerChanged"
+        case .msgIOError: return "ioError"
+        @unknown default: return "unknown"
         }
     }
 

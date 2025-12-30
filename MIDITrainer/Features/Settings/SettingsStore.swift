@@ -6,11 +6,14 @@ final class SettingsStore: ObservableObject {
     @Published var settings: PracticeSettingsSnapshot {
         didSet { save(settings) }
     }
-    @Published var feedback: FeedbackSettings {
-        didSet { saveFeedback(feedback) }
-    }
-    @Published var replayHotkeyEnabled: Bool {
-        didSet { defaults.set(replayHotkeyEnabled, forKey: replayHotkeyKey) }
+    @Published var replayHotkeyNote: UInt8? {
+        didSet {
+            if let note = replayHotkeyNote {
+                defaults.set(Int(note), forKey: replayHotkeyNoteKey)
+            } else {
+                defaults.removeObject(forKey: replayHotkeyNoteKey)
+            }
+        }
     }
     @Published var schedulerMode: SchedulerMode {
         didSet { defaults.set(schedulerMode.rawValue, forKey: schedulerModeKey) }
@@ -88,11 +91,22 @@ final class SettingsStore: ObservableObject {
     @Published var weightIntervalsByErrorRate: Bool {
         didSet { defaults.set(weightIntervalsByErrorRate, forKey: weightIntervalsByErrorRateKey) }
     }
+    /// Whether octave matters when matching notes (when false, only pitch class matters)
+    @Published var octaveMatters: Bool {
+        didSet { defaults.set(octaveMatters, forKey: octaveMattersKey) }
+    }
+    /// Whether to show note orbs indicating melody progress (when false, shows status text only)
+    @Published var showNoteOrbs: Bool {
+        didSet { defaults.set(showNoteOrbs, forKey: showNoteOrbsKey) }
+    }
+    /// Number of questions between mistake re-asks in spaced repetition mode
+    @Published var spacedMistakeClearance: Int {
+        didSet { defaults.set(spacedMistakeClearance, forKey: spacedMistakeClearanceKey) }
+    }
 
     private let defaults: UserDefaults
     private let key = "com.sambender.miditrainer.settings"
-    private let feedbackKey = "com.sambender.miditrainer.feedback"
-    private let replayHotkeyKey = "com.sambender.miditrainer.replayHotkeyEnabled"
+    private let replayHotkeyNoteKey = "com.sambender.miditrainer.replayHotkeyNote"
     private let schedulerModeKey = "com.sambender.miditrainer.schedulerMode"
     private let lastOutputIDKey = "com.sambender.miditrainer.lastOutputID"
     private let lastOutputNameKey = "com.sambender.miditrainer.lastOutputName"
@@ -111,6 +125,9 @@ final class SettingsStore: ObservableObject {
     private let melodyMIDIChannelKey = "com.sambender.miditrainer.melodyMIDIChannel"
     private let chordMIDIChannelKey = "com.sambender.miditrainer.chordMIDIChannel"
     private let weightIntervalsByErrorRateKey = "com.sambender.miditrainer.weightIntervalsByErrorRate"
+    private let octaveMattersKey = "com.sambender.miditrainer.octaveMatters"
+    private let showNoteOrbsKey = "com.sambender.miditrainer.showNoteOrbs"
+    private let spacedMistakeClearanceKey = "com.sambender.miditrainer.spacedMistakeClearance"
 
     private var todayDateString: String {
         let formatter = DateFormatter()
@@ -121,8 +138,11 @@ final class SettingsStore: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.settings = SettingsStore.load(defaults: defaults, key: key) ?? PracticeSettingsSnapshot()
-        self.feedback = SettingsStore.loadFeedback(defaults: defaults, key: feedbackKey) ?? FeedbackSettings()
-        self.replayHotkeyEnabled = defaults.object(forKey: replayHotkeyKey) as? Bool ?? false
+        if let storedNote = defaults.object(forKey: replayHotkeyNoteKey) as? Int {
+            self.replayHotkeyNote = UInt8(storedNote)
+        } else {
+            self.replayHotkeyNote = nil
+        }
         if let modeString = defaults.string(forKey: schedulerModeKey),
            let mode = SchedulerMode(rawValue: modeString) {
             self.schedulerMode = mode
@@ -153,6 +173,9 @@ final class SettingsStore: ObservableObject {
         self.melodyMIDIChannel = defaults.object(forKey: melodyMIDIChannelKey) as? Int ?? 0
         self.chordMIDIChannel = defaults.object(forKey: chordMIDIChannelKey) as? Int ?? 0
         self.weightIntervalsByErrorRate = defaults.object(forKey: weightIntervalsByErrorRateKey) as? Bool ?? false
+        self.octaveMatters = defaults.object(forKey: octaveMattersKey) as? Bool ?? true
+        self.showNoteOrbs = defaults.object(forKey: showNoteOrbsKey) as? Bool ?? true
+        self.spacedMistakeClearance = defaults.object(forKey: spacedMistakeClearanceKey) as? Int ?? 3
 
         // Check if it's a new day and reset daily count if needed
         let formatter = DateFormatter()
@@ -168,7 +191,15 @@ final class SettingsStore: ObservableObject {
     }
 
     func incrementQuestionsAnswered() {
+        checkForNewDay()
         questionsAnsweredToday += 1
+    }
+
+    private func checkForNewDay() {
+        let lastDate = defaults.string(forKey: lastPracticeDateKey)
+        if lastDate != todayDateString {
+            questionsAnsweredToday = 0
+        }
     }
 
     func incrementStreak() {
@@ -188,10 +219,6 @@ final class SettingsStore: ObservableObject {
         settings = newSettings
     }
 
-    func updateFeedback(_ newFeedback: FeedbackSettings) {
-        feedback = newFeedback
-    }
-
     private func save(_ settings: PracticeSettingsSnapshot) {
         let encoder = JSONEncoder()
         if let data = try? encoder.encode(settings) {
@@ -202,16 +229,5 @@ final class SettingsStore: ObservableObject {
     private static func load(defaults: UserDefaults, key: String) -> PracticeSettingsSnapshot? {
         guard let data = defaults.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(PracticeSettingsSnapshot.self, from: data)
-    }
-
-    private func saveFeedback(_ settings: FeedbackSettings) {
-        if let data = try? JSONEncoder().encode(settings) {
-            defaults.set(data, forKey: feedbackKey)
-        }
-    }
-
-    private static func loadFeedback(defaults: UserDefaults, key: String) -> FeedbackSettings? {
-        guard let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(FeedbackSettings.self, from: data)
     }
 }

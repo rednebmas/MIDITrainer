@@ -62,7 +62,10 @@ struct PracticeView: View {
                     errorIndex: model.errorNoteIndex,
                     firstNoteName: firstNoteName,
                     sourceName: model.currentSequence?.sourceName,
-                    showChordSymbols: model.showChordSymbols
+                    showChordSymbols: model.showChordSymbols,
+                    showOrbs: model.showNoteOrbs,
+                    isPlaying: model.isPlaying,
+                    isReplaying: model.isReplaying
                 )
 
                 // Floating Feedback Overlay
@@ -93,6 +96,7 @@ struct PracticeView: View {
                 isPlaying: model.isPlaying,
                 midiDeviceName: model.selectedOutputName,
                 isMidiConnected: isMidiConnected,
+                isScanningMIDI: model.isScanningMIDI,
                 onAction: handleAction,
                 onSkip: { model.skip() },
                 onMidiSettingsTap: { showingMIDISettings = true }
@@ -149,6 +153,7 @@ struct PracticeView: View {
             .presentationDetents([.medium])
         }
         .sheet(isPresented: $showingBluetoothPicker, onDismiss: {
+            print("[MIDI] BluetoothPicker onDismiss called - refreshing endpoints")
             model.refreshEndpoints()
         }) {
             BluetoothMIDIPicker()
