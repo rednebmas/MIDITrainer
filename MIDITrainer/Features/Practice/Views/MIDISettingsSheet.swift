@@ -3,17 +3,13 @@ import CoreMIDI
 import SwiftUI
 
 struct MIDISettingsSheet: View {
-    let availableOutputs: [MIDIEndpoint]
-    let selectedOutputID: MIDIUniqueID?
-    let useOnScreenKeyboard: Bool
-    let onSelectOutput: (MIDIUniqueID) -> Void
-    let onToggleOnScreenKeyboard: (Bool) -> Void
+    @ObservedObject var model: PracticeModel
     let onBluetoothTap: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     private var dedupedOutputs: [MIDIEndpoint] {
         var seen: Set<String> = []
-        return availableOutputs.filter { endpoint in
+        return model.availableOutputs.filter { endpoint in
             if seen.contains(endpoint.name) {
                 return false
             } else {
@@ -34,8 +30,8 @@ struct MIDISettingsSheet: View {
 
                     ForEach(dedupedOutputs, id: \.id) { endpoint in
                         Button {
-                            onToggleOnScreenKeyboard(false)
-                            onSelectOutput(endpoint.id)
+                            model.setUseOnScreenKeyboard(false)
+                            model.selectOutput(id: endpoint.id)
                             dismiss()
                         } label: {
                             HStack {
@@ -51,7 +47,7 @@ struct MIDISettingsSheet: View {
 
                                 Spacer()
 
-                                if !useOnScreenKeyboard && endpoint.id == selectedOutputID {
+                                if !model.useOnScreenKeyboard && endpoint.id == model.selectedOutputID {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(.blue)
                                 }
@@ -65,9 +61,26 @@ struct MIDISettingsSheet: View {
                     Text("Connect a MIDI keyboard for the best experience")
                 }
 
+                if let settings = model.currentDeviceSettings, !model.useOnScreenKeyboard, model.selectedOutputID != nil {
+                    Section {
+                        Toggle(isOn: Binding(
+                            get: { settings.playSamplesForMIDIInput },
+                            set: { newValue in
+                                var updated = settings
+                                updated.playSamplesForMIDIInput = newValue
+                                model.updateCurrentDeviceSettings(updated)
+                            }
+                        )) {
+                            Text("Play Piano Sounds")
+                        }
+                    } footer: {
+                        Text("Enable for MIDI keyboards that don't produce their own sounds")
+                    }
+                }
+
                 Section {
                     Button {
-                        onToggleOnScreenKeyboard(true)
+                        model.setUseOnScreenKeyboard(true)
                         dismiss()
                     } label: {
                         HStack {
@@ -77,7 +90,7 @@ struct MIDISettingsSheet: View {
 
                             Spacer()
 
-                            if useOnScreenKeyboard {
+                            if model.useOnScreenKeyboard {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(.blue)
                             }
@@ -122,13 +135,4 @@ struct BluetoothMIDIPicker: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: CABTMIDICentralViewController, context: Context) {}
 }
 
-#Preview {
-    MIDISettingsSheet(
-        availableOutputs: [],
-        selectedOutputID: nil,
-        useOnScreenKeyboard: false,
-        onSelectOutput: { _ in },
-        onToggleOnScreenKeyboard: { _ in },
-        onBluetoothTap: {}
-    )
-}
+// Preview requires live services, skip for now

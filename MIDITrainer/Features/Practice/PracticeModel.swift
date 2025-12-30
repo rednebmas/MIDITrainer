@@ -46,6 +46,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var showChordSymbols: Bool = true
     @Published private(set) var showNoteOrbs: Bool = true
     @Published private(set) var isScanningMIDI: Bool = true
+    @Published private(set) var currentDeviceSettings: DeviceSettings?
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -253,11 +254,9 @@ final class PracticeModel: ObservableObject {
     func selectOutput(id: MIDIUniqueID) {
         guard let endpoint = availableOutputs.first(where: { $0.id == id }) else { return }
         midiService.selectOutput(endpoint)
-        // Persist the selection
         settingsStore.lastSelectedOutputID = endpoint.id
         settingsStore.lastSelectedOutputName = endpoint.name
-        
-        // Also connect the matching input (same device name) for bidirectional MIDI
+        currentDeviceSettings = settingsStore.deviceSettings(for: endpoint.name)
         connectMatchingInput(for: endpoint)
     }
     
@@ -284,9 +283,17 @@ final class PracticeModel: ObservableObject {
         settingsStore.useOnScreenKeyboard = enabled
         if enabled {
             selectedOutputName = "On-Screen Keyboard"
+            currentDeviceSettings = nil
         } else if let output = availableOutputs.first(where: { $0.id == selectedOutputID }) {
             selectedOutputName = output.name
+            currentDeviceSettings = settingsStore.deviceSettings(for: output.name)
         }
+    }
+
+    func updateCurrentDeviceSettings(_ settings: DeviceSettings) {
+        guard let name = selectedOutputName, !useOnScreenKeyboard else { return }
+        currentDeviceSettings = settings
+        settingsStore.setDeviceSettings(settings, for: name)
     }
 
     func injectNoteOn(_ noteNumber: UInt8) {
@@ -376,14 +383,31 @@ final class PracticeModel: ObservableObject {
         midiService.selectedOutputPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] endpoint in
-                self?.selectedOutputID = endpoint?.id
-                self?.selectedOutputName = endpoint?.name
+                guard let self else { return }
+                self.selectedOutputID = endpoint?.id
+                self.selectedOutputName = endpoint?.name
+                if let name = endpoint?.name, !self.useOnScreenKeyboard {
+                    self.currentDeviceSettings = self.settingsStore.deviceSettings(for: name)
+                } else {
+                    self.currentDeviceSettings = nil
+                }
             }
             .store(in: &cancellables)
 
         midiService.isScanningPublisher
             .receive(on: DispatchQueue.main)
             .assign(to: \.isScanningMIDI, on: self)
+            .store(in: &cancellables)
+
+        midiService.noteEvents
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self,
+                      !self.useOnScreenKeyboard,
+                      self.currentDeviceSettings?.playSamplesForMIDIInput == true,
+                      case .noteOn(let noteNumber, let velocity) = event else { return }
+                self.pianoSamplePlayer.play(midiNote: noteNumber, velocity: velocity)
+            }
             .store(in: &cancellables)
 
         engine.$state

@@ -134,15 +134,7 @@ struct PracticeView: View {
         }
         .sheet(isPresented: $showingMIDISettings) {
             MIDISettingsSheet(
-                availableOutputs: model.availableOutputs,
-                selectedOutputID: model.selectedOutputID,
-                useOnScreenKeyboard: model.useOnScreenKeyboard,
-                onSelectOutput: { id in
-                    model.selectOutput(id: id)
-                },
-                onToggleOnScreenKeyboard: { enabled in
-                    model.setUseOnScreenKeyboard(enabled)
-                },
+                model: model,
                 onBluetoothTap: {
                     showingMIDISettings = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -150,7 +142,7 @@ struct PracticeView: View {
                     }
                 }
             )
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
         }
         .sheet(isPresented: $showingBluetoothPicker, onDismiss: {
             print("[MIDI] BluetoothPicker onDismiss called - refreshing endpoints")

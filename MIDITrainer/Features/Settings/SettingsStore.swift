@@ -2,6 +2,10 @@ import CoreMIDI
 import Foundation
 import Combine
 
+struct DeviceSettings: Codable, Equatable {
+    var playSamplesForMIDIInput: Bool = false
+}
+
 final class SettingsStore: ObservableObject {
     @Published var settings: PracticeSettingsSnapshot {
         didSet { save(settings) }
@@ -104,6 +108,8 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(spacedMistakeClearance, forKey: spacedMistakeClearanceKey) }
     }
 
+    private var deviceSettingsCache: [String: DeviceSettings] = [:]
+
     private let defaults: UserDefaults
     private let key = "com.sambender.miditrainer.settings"
     private let replayHotkeyNoteKey = "com.sambender.miditrainer.replayHotkeyNote"
@@ -128,6 +134,7 @@ final class SettingsStore: ObservableObject {
     private let octaveMattersKey = "com.sambender.miditrainer.octaveMatters"
     private let showNoteOrbsKey = "com.sambender.miditrainer.showNoteOrbs"
     private let spacedMistakeClearanceKey = "com.sambender.miditrainer.spacedMistakeClearance"
+    private let deviceSettingsKey = "com.sambender.miditrainer.deviceSettings"
 
     private var todayDateString: String {
         let formatter = DateFormatter()
@@ -176,6 +183,11 @@ final class SettingsStore: ObservableObject {
         self.octaveMatters = defaults.object(forKey: octaveMattersKey) as? Bool ?? true
         self.showNoteOrbs = defaults.object(forKey: showNoteOrbsKey) as? Bool ?? true
         self.spacedMistakeClearance = defaults.object(forKey: spacedMistakeClearanceKey) as? Int ?? 3
+
+        if let data = defaults.data(forKey: deviceSettingsKey),
+           let decoded = try? JSONDecoder().decode([String: DeviceSettings].self, from: data) {
+            self.deviceSettingsCache = decoded
+        }
 
         // Check if it's a new day and reset daily count if needed
         let formatter = DateFormatter()
@@ -229,5 +241,16 @@ final class SettingsStore: ObservableObject {
     private static func load(defaults: UserDefaults, key: String) -> PracticeSettingsSnapshot? {
         guard let data = defaults.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(PracticeSettingsSnapshot.self, from: data)
+    }
+
+    func deviceSettings(for deviceName: String) -> DeviceSettings {
+        deviceSettingsCache[deviceName] ?? DeviceSettings()
+    }
+
+    func setDeviceSettings(_ settings: DeviceSettings, for deviceName: String) {
+        deviceSettingsCache[deviceName] = settings
+        if let data = try? JSONEncoder().encode(deviceSettingsCache) {
+            defaults.set(data, forKey: deviceSettingsKey)
+        }
     }
 }
