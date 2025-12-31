@@ -133,7 +133,7 @@ private struct WhiteKeyView: View {
     let onNoteOn: () -> Void
     let onNoteOff: () -> Void
 
-    @GestureState private var isPressed = false
+    @State private var isPressed = false
     @State private var showingCorrect = false
     @State private var showingWrong = false
 
@@ -173,21 +173,18 @@ private struct WhiteKeyView: View {
                     .stroke(Color(hex: "8E9AA3"), lineWidth: 1)
             )
             .frame(width: width, height: height)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($isPressed) { _, state, _ in
-                        if !state {
-                            state = true
-                            onNoteOn()
-                        }
-                    }
-                    .onEnded { _ in
+            .contentShape(Rectangle())
+            .onLongPressGesture(
+                minimumDuration: 100,
+                pressing: { pressing in
+                    isPressed = pressing
+                    if pressing {
+                        onNoteOn()
+                    } else {
                         onNoteOff()
                     }
-            )
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0)
-                    .onEnded { _ in }
+                },
+                perform: {}
             )
     }
 }
@@ -198,7 +195,7 @@ private struct BlackKeyView: View {
     let onNoteOn: () -> Void
     let onNoteOff: () -> Void
 
-    @GestureState private var isPressed = false
+    @State private var isPressed = false
 
     private var fillGradient: LinearGradient {
         if isPressed {
@@ -225,17 +222,18 @@ private struct BlackKeyView: View {
             )
             .frame(width: width, height: height)
             .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 2)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($isPressed) { _, state, _ in
-                        if !state {
-                            state = true
-                            onNoteOn()
-                        }
-                    }
-                    .onEnded { _ in
+            .contentShape(Rectangle())
+            .onLongPressGesture(
+                minimumDuration: 100,
+                pressing: { pressing in
+                    isPressed = pressing
+                    if pressing {
+                        onNoteOn()
+                    } else {
                         onNoteOff()
                     }
+                },
+                perform: {}
             )
     }
 }

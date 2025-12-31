@@ -444,7 +444,8 @@ final class PracticeModel: ObservableObject {
                 guard let self,
                       !self.useOnScreenKeyboard,
                       self.currentDeviceSettings?.playSamplesForMIDIInput == true,
-                      case .noteOn(let noteNumber, let velocity) = event else { return }
+                      case .noteOn(let noteNumber, let velocity) = event,
+                      noteNumber != self.settingsStore.replayHotkeyNote else { return }
                 self.pianoSamplePlayer.play(midiNote: noteNumber, velocity: velocity)
             }
             .store(in: &cancellables)
