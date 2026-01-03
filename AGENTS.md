@@ -7,7 +7,7 @@ This repo is a SwiftUI iPad app: a MIDI-based piano trainer. The app plays a 1-b
 ## Non-negotiable engineering rules
 
 - **DRY (critical):** Search the codebase for existing logic before adding new code. Refactor to share.
-- **Keep logic out of Views:** SwiftUI Views render state + forward user intent. Business logic lives in testable models/services.
+- **Separation of concerns:** Business logic lives in testable models/services, not views. Display-specific concerns (timing, animations, visual state) belong in views, not in models or engines. Models expose source-of-truth state; views decide when and how to reflect it visually.
 - **Small, composable units:**
   - Prefer many small types over a few large ones.
   - Keep most functions under ~25 lines.

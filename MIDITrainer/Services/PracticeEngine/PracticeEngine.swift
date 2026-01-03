@@ -48,7 +48,11 @@ final class PracticeEngine: ObservableObject {
     /// Whether playback has finished (user can still input during playback)
     private var playbackFinished: Bool = false
     /// Tracks currently held MIDI notes for detecting when all keys are released
-    private var heldNotes: Set<UInt8> = []
+    private var heldNotes: Set<UInt8> = [] {
+        didSet { keysAreHeld = !heldNotes.isEmpty }
+    }
+    /// Whether any keys are currently being held (for display timing in views)
+    @Published private(set) var keysAreHeld: Bool = false
     /// Pending action to execute when all keys are released
     private var pendingCompletionAction: (() -> Void)?
     /// The seed used for the current sequence (for scheduler tracking)
@@ -256,7 +260,8 @@ final class PracticeEngine: ObservableObject {
                 seed: seed,
                 settings: settings,
                 hadErrors: madeErrorInCurrentAttempt,
-                mistakeId: currentMistakeId
+                mistakeId: currentMistakeId,
+                sourceName: sequence.sourceName
             )
         }
         

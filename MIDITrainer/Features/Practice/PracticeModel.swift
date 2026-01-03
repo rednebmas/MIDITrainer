@@ -5,6 +5,7 @@ import Foundation
 struct SchedulerDebugEntry: Identifiable, Equatable {
     let id: Int64
     let seed: UInt64
+    let sourceName: String?
     let minimumClearanceDistance: Int
     let currentClearanceDistance: Int
     let questionsSinceQueued: Int
@@ -47,6 +48,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var showNoteOrbs: Bool = true
     @Published private(set) var isScanningMIDI: Bool = true
     @Published private(set) var currentDeviceSettings: DeviceSettings?
+    @Published private(set) var keysAreHeld: Bool = false
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -223,6 +225,7 @@ final class PracticeModel: ObservableObject {
                 return SchedulerDebugEntry(
                     id: mistake.id,
                     seed: mistake.seed,
+                    sourceName: mistake.sourceName,
                     minimumClearanceDistance: mistake.minimumClearanceDistance,
                     currentClearanceDistance: mistake.currentClearanceDistance,
                     questionsSinceQueued: mistake.questionsSinceQueued,
@@ -491,6 +494,11 @@ final class PracticeModel: ObservableObject {
         engine.$errorNoteIndex
             .receive(on: DispatchQueue.main)
             .assign(to: \.errorNoteIndex, on: self)
+            .store(in: &cancellables)
+
+        engine.$keysAreHeld
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.keysAreHeld, on: self)
             .store(in: &cancellables)
     }
 

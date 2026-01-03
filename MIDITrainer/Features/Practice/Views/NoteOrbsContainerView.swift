@@ -1,33 +1,32 @@
 import SwiftUI
 
 struct NoteOrbsContainerView: View {
-    let sequence: MelodySequence?
-    let awaitingIndex: Int?
-    let errorIndex: Int?
-    let firstNoteName: String?
-    let sourceName: String?
-    let showChordSymbols: Bool
-    let showOrbs: Bool
-    let isPlaying: Bool
-    let isReplaying: Bool
+    @ObservedObject var model: PracticeModel
 
     @SwiftUI.State private var appearingOrbs: Set<Int> = []
+    @SwiftUI.State private var displayedAwaitingIndex: Int?
+
+    private var sequence: MelodySequence? { model.currentSequence }
+
+    private var firstNoteName: String? {
+        guard let midiNumber = sequence?.notes.first?.midiNoteNumber,
+              let noteName = NoteName(rawValue: Int(midiNumber % 12)) else { return nil }
+        return noteName.displayName
+    }
 
     private var statusText: String {
         guard sequence != nil else { return "Press Start to begin" }
-        if isPlaying {
-            return isReplaying ? "Replaying..." : "Playing..."
+        if model.isPlaying {
+            return model.isReplaying ? "Replaying..." : "Playing..."
         } else {
             return "Your turn..."
         }
     }
 
-    /// Returns a formatted string of all chord symbols for display
     private var chordSymbolsText: String? {
-        guard showChordSymbols,
+        guard model.showChordSymbols,
               let chords = sequence?.chords,
               !chords.isEmpty else { return nil }
-        // Show unique chord symbols in order of appearance
         var seen = Set<String>()
         var result: [String] = []
         for chord in chords {
@@ -42,7 +41,7 @@ struct NoteOrbsContainerView: View {
     var body: some View {
         VStack(spacing: 24) {
             if let sequence = sequence {
-                if showOrbs {
+                if model.showNoteOrbs {
                     HStack(spacing: 16) {
                         ForEach(Array(sequence.notes.enumerated()), id: \.offset) { index, _ in
                             NoteOrbView(state: orbState(for: index), index: index)
@@ -79,7 +78,7 @@ struct NoteOrbsContainerView: View {
                         }
                     }
 
-                    if let source = sourceName {
+                    if let source = sequence.sourceName {
                         HStack(spacing: 6) {
                             Image(systemName: "waveform")
                                 .font(.caption)
@@ -103,7 +102,6 @@ struct NoteOrbsContainerView: View {
                 }
                 .padding(.top, 8)
             } else {
-                // Empty state
                 VStack(spacing: 16) {
                     Image(systemName: "pianokeys")
                         .font(.system(size: 48))
@@ -116,16 +114,22 @@ struct NoteOrbsContainerView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
+        .onChange(of: model.keysAreHeld) { _, keysHeld in
+            if !keysHeld {
+                displayedAwaitingIndex = model.awaitingNoteIndex
+            }
+        }
+        .onChange(of: model.currentSequence?.seed) { _, _ in
+            displayedAwaitingIndex = model.awaitingNoteIndex
+        }
     }
 
     private func orbState(for index: Int) -> NoteOrbView.State {
-        // Error state takes priority
-        if let errorIdx = errorIndex, errorIdx == index {
+        if let errorIdx = model.errorNoteIndex, errorIdx == index {
             return .error
         }
 
-        guard let awaiting = awaitingIndex else {
-            // Sequence completed - all are correct
+        guard let awaiting = displayedAwaitingIndex else {
             return .correct
         }
 
@@ -148,18 +152,4 @@ struct NoteOrbsContainerView: View {
             }
         }
     }
-}
-
-#Preview {
-    NoteOrbsContainerView(
-        sequence: nil,
-        awaitingIndex: nil,
-        errorIndex: nil,
-        firstNoteName: nil,
-        sourceName: nil,
-        showChordSymbols: true,
-        showOrbs: true,
-        isPlaying: false,
-        isReplaying: false
-    )
 }

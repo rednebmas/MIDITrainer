@@ -15,12 +15,6 @@ struct PracticeView: View {
         _model = StateObject(wrappedValue: PracticeModel(midiService: midiService, settingsStore: settingsStore))
     }
 
-    private var firstNoteName: String? {
-        guard let midiNumber = model.currentSequence?.notes.first?.midiNoteNumber,
-              let noteName = NoteName(rawValue: Int(midiNumber % 12)) else { return nil }
-        return noteName.displayName
-    }
-
     private var isMidiConnected: Bool {
         if model.useOnScreenKeyboard { return true }
         guard let outputID = model.selectedOutputID else { return false }
@@ -56,17 +50,7 @@ struct PracticeView: View {
 
             // Center Stage - Note Orbs
             ZStack {
-                NoteOrbsContainerView(
-                    sequence: model.currentSequence,
-                    awaitingIndex: model.awaitingNoteIndex,
-                    errorIndex: model.errorNoteIndex,
-                    firstNoteName: firstNoteName,
-                    sourceName: model.currentSequence?.sourceName,
-                    showChordSymbols: model.showChordSymbols,
-                    showOrbs: model.showNoteOrbs,
-                    isPlaying: model.isPlaying,
-                    isReplaying: model.isReplaying
-                )
+                NoteOrbsContainerView(model: model)
 
                 // Floating Feedback Overlay
                 if let feedback = model.latestFeedback {
