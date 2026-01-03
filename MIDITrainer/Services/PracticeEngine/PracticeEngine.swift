@@ -196,7 +196,11 @@ final class PracticeEngine: ObservableObject {
 
     private func handleReplayHotkey(noteNumber: UInt8) -> Bool {
         guard let hotkeyNote = replayHotkeyNote(), noteNumber == hotkeyNote else { return false }
-        replay()
+        if case .idle = state {
+            playQuestion(settings: currentSettingsProvider())
+        } else {
+            replay()
+        }
         return true
     }
 
