@@ -1,53 +1,28 @@
 import SwiftUI
 
 struct GameStatsBarView: View {
-    let accuracy: Double?
-    let accuracyCount: Int
-    let questionsToday: Int
-    let dailyGoal: Int
-    let streak: Int
+    @ObservedObject var model: PracticeModel
     var onAccuracyTap: (() -> Void)? = nil
+
+    private var accuracy: Double? { model.firstTryAccuracy?.rate }
+    private var questionsToday: Int { model.questionsAnsweredToday }
+    private var dailyGoal: Int { model.dailyGoal }
+    private var streak: Int { model.currentStreak }
 
     var body: some View {
         HStack(spacing: 40) {
-            // Accuracy
             Button(action: { onAccuracyTap?() }) {
                 accuracyView
             }
             .buttonStyle(.plain)
 
-            // Daily Goal
             dailyGoalView
 
-            // Streak
             streakView
         }
         .padding(.horizontal, 40)
         .padding(.vertical, 16)
-        .background {
-            // Colored glows that bleed through the glass
-            ZStack {
-                // Accuracy glow (left)
-                Circle()
-                    .fill(accuracyColor.opacity(0.2))
-                    .blur(radius: 30)
-                    .frame(width: 80, height: 80)
-                    .offset(x: -90)
-
-                // Daily goal glow (center)
-                Circle()
-                    .fill(dailyGoalColor.opacity(0.25))
-                    .blur(radius: 25)
-                    .frame(width: 70, height: 70)
-
-                // Streak glow (right)
-                Circle()
-                    .fill(streakColor.opacity(0.2))
-                    .blur(radius: 30)
-                    .frame(width: 80, height: 80)
-                    .offset(x: 90)
-            }
-        }
+        .background { glowBackground }
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(
@@ -55,6 +30,27 @@ struct GameStatsBarView: View {
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
         )
         .padding(.horizontal, 20)
+    }
+
+    private var glowBackground: some View {
+        ZStack {
+            Circle()
+                .fill(accuracyColor.opacity(0.2))
+                .blur(radius: 30)
+                .frame(width: 80, height: 80)
+                .offset(x: -90)
+
+            Circle()
+                .fill(dailyGoalColor.opacity(0.25))
+                .blur(radius: 25)
+                .frame(width: 70, height: 70)
+
+            Circle()
+                .fill(streakColor.opacity(0.2))
+                .blur(radius: 30)
+                .frame(width: 80, height: 80)
+                .offset(x: 90)
+        }
     }
 
     // MARK: - Accuracy View
@@ -184,40 +180,3 @@ struct GameStatsBarView: View {
     }
 }
 
-#Preview {
-    ZStack {
-        LinearGradient(
-            colors: [.blue.opacity(0.3), .purple.opacity(0.3)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-
-        VStack(spacing: 40) {
-            GameStatsBarView(
-                accuracy: 0.85,
-                accuracyCount: 20,
-                questionsToday: 24,
-                dailyGoal: 30,
-                streak: 5
-            )
-
-            GameStatsBarView(
-                accuracy: 0.45,
-                accuracyCount: 10,
-                questionsToday: 30,
-                dailyGoal: 30,
-                streak: 12
-            )
-
-            GameStatsBarView(
-                accuracy: nil,
-                accuracyCount: 0,
-                questionsToday: 0,
-                dailyGoal: 30,
-                streak: 0
-            )
-        }
-        .padding()
-    }
-}

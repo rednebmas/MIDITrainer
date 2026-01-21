@@ -1,6 +1,13 @@
 import Combine
 import Foundation
 
+struct DebugAttempt: Equatable {
+    let playedNote: UInt8
+    let expectedNote: UInt8
+    let isCorrect: Bool
+    let timestamp: Date
+}
+
 final class PracticeEngine: ObservableObject {
     enum State: Equatable {
         case idle
@@ -56,13 +63,16 @@ final class PracticeEngine: ObservableObject {
     /// Pending action to execute when all keys are released
     private var pendingCompletionAction: (() -> Void)?
     /// The seed used for the current sequence (for scheduler tracking)
-    private var currentSeed: UInt64?
+    private(set) var currentSeed: UInt64?
     /// If the current sequence is a re-ask, this is the mistake ID
     private var currentMistakeId: Int64?
     /// Whether we've already recorded a completion for the current sequence (to avoid duplicates on replays)
     private var hasRecordedCompletion: Bool = false
     /// Whether the user ever made an error on the current sequence (persists across replays)
     @Published private(set) var hadErrorsInSequence: Bool = false
+    /// Recent input attempts for debugging (stores up to 10 most recent)
+    @Published private(set) var recentAttempts: [DebugAttempt] = []
+    private let maxRecentAttempts = 10
 
     init(
         midiService: MIDIService,
@@ -158,6 +168,7 @@ final class PracticeEngine: ObservableObject {
             errorNoteIndex = nil
             madeErrorInCurrentAttempt = false
             playbackFinished = false
+            recentAttempts = []
 
             DispatchQueue.main.async { [weak self] in
                 self?.state = .active(sequence: sequence, isPlayingBack: true)
@@ -227,6 +238,17 @@ final class PracticeEngine: ObservableObject {
             scale: scale,
             isCorrect: isCorrect
         )
+
+        let debugAttempt = DebugAttempt(
+            playedNote: noteNumber,
+            expectedNote: expectedNote.midiNoteNumber,
+            isCorrect: isCorrect,
+            timestamp: Date()
+        )
+        recentAttempts.append(debugAttempt)
+        if recentAttempts.count > maxRecentAttempts {
+            recentAttempts.removeFirst()
+        }
 
         persistAttempt(descriptor: descriptor, sequence: sequence, noteIndex: currentInputIndex)
 

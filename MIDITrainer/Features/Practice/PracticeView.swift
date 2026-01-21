@@ -15,12 +15,6 @@ struct PracticeView: View {
         _model = StateObject(wrappedValue: PracticeModel(midiService: midiService, settingsStore: settingsStore))
     }
 
-    private var isMidiConnected: Bool {
-        if model.useOnScreenKeyboard { return true }
-        guard let outputID = model.selectedOutputID else { return false }
-        return model.availableOutputs.first(where: { $0.id == outputID })?.isOffline == false
-    }
-
     private var keyboardOctaves: [Int] {
         model.settings.allowedOctaves.isEmpty ? [4] : model.settings.allowedOctaves
     }
@@ -37,11 +31,7 @@ struct PracticeView: View {
         VStack(spacing: 0) {
             // Top Stats Bar
             GameStatsBarView(
-                accuracy: model.firstTryAccuracy?.rate,
-                accuracyCount: model.firstTryAccuracy?.totalCount ?? 0,
-                questionsToday: model.questionsAnsweredToday,
-                dailyGoal: model.dailyGoal,
-                streak: model.currentStreak,
+                model: model,
                 onAccuracyTap: { showingAccuracyHistory = true }
             )
             .padding(.top, 16)
@@ -76,44 +66,22 @@ struct PracticeView: View {
 
             // Bottom Action Bar
             ActionBarView(
-                hasSequence: model.currentSequence != nil,
-                isPlaying: model.isPlaying,
-                midiDeviceName: model.selectedOutputName,
-                isMidiConnected: isMidiConnected,
-                isScanningMIDI: model.isScanningMIDI,
+                model: model,
                 onAction: handleAction,
-                onSkip: { model.skip() },
                 onMidiSettingsTap: { showingMIDISettings = true }
             )
             .padding(.bottom, 8)
 
             #if DEBUG
             Button {
-                withAnimation { showingDebug.toggle() }
+                showingDebug = true
             } label: {
-                HStack {
-                    Image(systemName: showingDebug ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                    Text("Scheduler Debug")
-                        .font(.caption)
-                }
-                .foregroundStyle(.secondary)
+                Text("Debug")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
             .padding(.bottom, 8)
-
-            if showingDebug {
-                SchedulerDebugView(
-                    mode: model.schedulerMode,
-                    spacedEntries: model.schedulerDebugEntries,
-                    weaknessEntries: model.weaknessDebugEntries,
-                    pendingCount: model.pendingMistakeCount,
-                    questionsUntilNextReask: model.questionsUntilNextReask,
-                    onClearQueue: { model.clearMistakeQueue() }
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-            }
             #endif
         }
         .sheet(isPresented: $showingMIDISettings) {
@@ -146,6 +114,12 @@ struct PracticeView: View {
             )
             .presentationDetents([.medium, .large])
         }
+        #if DEBUG
+        .sheet(isPresented: $showingDebug) {
+            SchedulerDebugSheet(model: model)
+                .presentationDetents([.medium, .large])
+        }
+        #endif
     }
 
     private func handleAction() {

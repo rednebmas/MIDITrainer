@@ -1,6 +1,7 @@
 import Combine
 import CoreMIDI
 import Foundation
+import UIKit
 
 struct SchedulerDebugEntry: Identifiable, Equatable {
     let id: Int64
@@ -49,6 +50,12 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var isScanningMIDI: Bool = true
     @Published private(set) var currentDeviceSettings: DeviceSettings?
     @Published private(set) var keysAreHeld: Bool = false
+
+    var isMidiConnected: Bool {
+        if useOnScreenKeyboard { return true }
+        guard let outputID = selectedOutputID else { return false }
+        return availableOutputs.first(where: { $0.id == outputID })?.isOffline == false
+    }
 
     private let midiService: MIDIService
     private let engine: PracticeEngine
@@ -167,8 +174,18 @@ final class PracticeModel: ObservableObject {
         bind()
         bindStats()
         bindScheduler()
+        bindForegroundRefresh()
         refreshFirstTryAccuracy()
         refreshWeaknessEntries()
+    }
+
+    private func bindForegroundRefresh() {
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshFirstTryAccuracy()
+            }
+            .store(in: &cancellables)
     }
 
     private func bindStats() {
@@ -542,5 +559,45 @@ final class PracticeModel: ObservableObject {
                 self.sequenceHistory = history ?? []
             }
         }
+    }
+
+    func buildDebugInfo() -> DebugInfo {
+        let questionState = buildQuestionState()
+        let settingsContext = buildSettingsContext()
+        let attempts = engine.recentAttempts.map {
+            DebugInfo.AttemptEntry(playedNote: $0.playedNote, expectedNote: $0.expectedNote, isCorrect: $0.isCorrect)
+        }
+        let sequenceInfo = buildSequenceInfo()
+        return DebugInfo(questionState: questionState, settingsContext: settingsContext, recentAttempts: attempts, sequenceInfo: sequenceInfo)
+    }
+
+    private func buildQuestionState() -> DebugInfo.QuestionState {
+        let totalNotes = currentSequence?.notes.count ?? 0
+        let expectedNote: UInt8? = {
+            guard let idx = awaitingNoteIndex, let seq = currentSequence, idx < seq.notes.count else { return nil }
+            return seq.notes[idx].midiNoteNumber
+        }()
+        let isOctaveSensitive = settingsStore.octaveMatters && !useOnScreenKeyboard
+        return DebugInfo.QuestionState(noteIndex: awaitingNoteIndex, totalNotes: totalNotes, expectedMidiNote: expectedNote, isOctaveSensitive: isOctaveSensitive)
+    }
+
+    private func buildSettingsContext() -> DebugInfo.SettingsContext {
+        DebugInfo.SettingsContext(
+            keyName: settings.key.root.displayName,
+            scaleName: settings.scaleType.storageKey.capitalized,
+            allowedOctaves: settings.allowedOctaves,
+            octaveMatters: settingsStore.octaveMatters,
+            useOnScreenKeyboard: useOnScreenKeyboard
+        )
+    }
+
+    private func buildSequenceInfo() -> DebugInfo.SequenceInfo? {
+        guard let sequence = currentSequence else { return nil }
+        let seedOrName: String = {
+            if let seed = engine.currentSeed { return String(seed) }
+            if let name = sequence.sourceName { return name }
+            return "unknown"
+        }()
+        return DebugInfo.SequenceInfo(seedOrName: seedOrName, midiNotes: sequence.notes.map(\.midiNoteNumber))
     }
 }

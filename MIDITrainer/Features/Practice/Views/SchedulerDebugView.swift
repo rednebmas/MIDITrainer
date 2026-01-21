@@ -1,5 +1,64 @@
 import SwiftUI
 
+struct SchedulerDebugSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: PracticeModel
+    @State private var showCopiedFeedback = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    SchedulerDebugView(
+                        mode: model.schedulerMode,
+                        spacedEntries: model.schedulerDebugEntries,
+                        weaknessEntries: model.weaknessDebugEntries,
+                        pendingCount: model.pendingMistakeCount,
+                        questionsUntilNextReask: model.questionsUntilNextReask,
+                        onClearQueue: { model.clearMistakeQueue() }
+                    )
+
+                    CopyDebugInfoButton(showCopiedFeedback: $showCopiedFeedback) {
+                        model.buildDebugInfo().formatted
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Debug")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct CopyDebugInfoButton: View {
+    @Binding var showCopiedFeedback: Bool
+    let getDebugInfo: () -> String
+
+    var body: some View {
+        Button {
+            let info = getDebugInfo()
+            UIPasteboard.general.string = info
+            showCopiedFeedback = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                showCopiedFeedback = false
+            }
+        } label: {
+            HStack {
+                Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
+                Text(showCopiedFeedback ? "Copied!" : "Copy Debug Info")
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .tint(showCopiedFeedback ? .green : .blue)
+    }
+}
+
 struct SchedulerDebugView: View {
     let mode: SchedulerMode
     let spacedEntries: [SchedulerDebugEntry]
@@ -111,12 +170,18 @@ private struct SpacedMistakeRow: View {
         String(format: "%04d", entry.seed % 10000)
     }
 
+    private var displayName: String {
+        entry.sourceName ?? "#\(shortSeed)"
+    }
+
     var body: some View {
         HStack(spacing: 8) {
-            Text("#\(shortSeed)")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            Text(displayName)
+                .font(.system(size: 10, weight: .semibold, design: entry.sourceName == nil ? .monospaced : .default))
                 .foregroundStyle(.white)
-                .frame(width: 40, height: 18)
+                .lineLimit(1)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
                 .background(statusColor.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
