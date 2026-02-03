@@ -4,15 +4,11 @@ import Foundation
 import UIKit
 
 struct SchedulerDebugEntry: Identifiable, Equatable {
-    let id: Int64
-    let seed: UInt64
-    let sourceName: String?
-    let minimumClearanceDistance: Int
-    let currentClearanceDistance: Int
-    let questionsSinceQueued: Int
-    let remainingUntilDue: Int
-    let isDue: Bool
+    let mistake: QueuedMistake
     let isActive: Bool
+
+    var id: Int64 { mistake.id }
+    var remainingUntilDue: Int { max(mistake.currentClearanceDistance - mistake.questionsSinceQueued, 0) }
 }
 
 enum SequenceFeedback {
@@ -244,19 +240,8 @@ final class PracticeModel: ObservableObject {
         )
         .receive(on: DispatchQueue.main)
         .sink { [weak self] queue, activeId in
-            let entries = queue.map { mistake -> SchedulerDebugEntry in
-                let remaining = max(mistake.currentClearanceDistance - mistake.questionsSinceQueued, 0)
-                return SchedulerDebugEntry(
-                    id: mistake.id,
-                    seed: mistake.seed,
-                    sourceName: mistake.sourceName,
-                    minimumClearanceDistance: mistake.minimumClearanceDistance,
-                    currentClearanceDistance: mistake.currentClearanceDistance,
-                    questionsSinceQueued: mistake.questionsSinceQueued,
-                    remainingUntilDue: remaining,
-                    isDue: mistake.isDue,
-                    isActive: mistake.id == activeId
-                )
+            let entries = queue.map { mistake in
+                SchedulerDebugEntry(mistake: mistake, isActive: mistake.id == activeId)
             }
             self?.schedulerDebugEntries = entries
         }

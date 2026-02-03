@@ -146,18 +146,20 @@ private struct SpacedMistakesDebugSection: View {
 private struct SpacedMistakeRow: View {
     let entry: SchedulerDebugEntry
 
+    private var mistake: QueuedMistake { entry.mistake }
+
     private var shortSeed: String {
-        String(format: "%04d", entry.seed % 10000)
+        String(format: "%04d", mistake.seed % 10000)
     }
 
     private var displayName: String {
-        entry.sourceName ?? "#\(shortSeed)"
+        mistake.sourceName ?? "#\(shortSeed)"
     }
 
     var body: some View {
         HStack(spacing: 8) {
             Text(displayName)
-                .font(.system(size: 10, weight: .semibold, design: entry.sourceName == nil ? .monospaced : .default))
+                .font(.system(size: 10, weight: .semibold, design: mistake.sourceName == nil ? .monospaced : .default))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .padding(.horizontal, 6)
@@ -177,7 +179,7 @@ private struct SpacedMistakeRow: View {
 
             Spacer()
 
-            if !entry.isDue && !entry.isActive {
+            if !mistake.isDue && !entry.isActive {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
                     .frame(width: 40)
@@ -186,34 +188,27 @@ private struct SpacedMistakeRow: View {
     }
 
     private var statusDescription: String {
-        if entry.isActive { return "Playing" }
-        if entry.isDue { return "Ready" }
+        if entry.isActive { return "Retry #\(mistake.totalFailures)" }
+        if mistake.isDue { return "Ready" }
         return "Waiting"
     }
 
     private var progress: Double {
-        guard entry.currentClearanceDistance > 0 else { return 0 }
-        return Double(entry.questionsSinceQueued) / Double(entry.currentClearanceDistance)
+        guard mistake.currentClearanceDistance > 0 else { return 0 }
+        return Double(mistake.questionsSinceQueued) / Double(mistake.currentClearanceDistance)
     }
 
     private var statusColor: Color {
         if entry.isActive { return .green }
-        if entry.isDue { return .orange }
+        if mistake.isDue { return .orange }
         return .blue
     }
 
     private var progressDescription: String {
-        // Clearance increment is 3, so fail count = (min - 3) / 3
-        // Initial clearance is 3, first fail bumps to 6, second to 9, etc.
-        let failCount = max(0, (entry.minimumClearanceDistance - 3) / 3)
-        let remaining = entry.currentClearanceDistance - entry.questionsSinceQueued
-
-        if failCount == 0 {
-            return remaining > 0 ? "\(remaining) to go" : "Ready"
-        } else {
-            let failText = "Failed \(failCount)x"
-            return remaining > 0 ? "\(failText) • \(remaining) to go" : "\(failText) • Ready"
-        }
+        let remaining = mistake.currentClearanceDistance - mistake.questionsSinceQueued
+        let gap = mistake.currentClearanceDistance
+        let failText = "Failed \(mistake.totalFailures)x"
+        return remaining > 0 ? "\(failText) • \(remaining) to go • \(gap) gap" : "\(failText) • Ready"
     }
 }
 

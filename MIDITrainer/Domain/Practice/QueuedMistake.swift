@@ -33,6 +33,11 @@ struct QueuedMistake: Equatable, Codable {
     var isDue: Bool {
         questionsSinceQueued >= currentClearanceDistance
     }
+
+    /// Total times this card has been failed (1 for initial failure + subsequent re-ask failures).
+    var totalFailures: Int {
+        1 + (minimumClearanceDistance - Self.initialClearanceDistance) / Self.clearanceIncrement
+    }
     
     /// The timestamp when this mistake was first queued.
     let queuedAt: Date
