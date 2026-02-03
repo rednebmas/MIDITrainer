@@ -1,12 +1,12 @@
-# AGENTS.md
+# MIDI Trainer
 
 This repo is a SwiftUI iPad app: a MIDI-based piano trainer. The app plays a 1-bar (4/4) melody over MIDI (constrained to a chosen scale/key), then waits for the user to play it back (pitch only). It records detailed mistakes (expected vs guessed scale degree + interval + note index) so we can graph systematic inaccuracies.
 
 ## How to work in this repo
 
-## Non-negotiable engineering rules
+## NON-NEGOTIABLE ENGINEERING RULES
 
-- **DRY (critical):** Search the codebase for existing logic before adding new code. Refactor to share.
+- **DRY (CRITICAL):** Search the codebase for existing logic before adding new code. Refactor to share. VIOLATING DRY IS A BUG.
 - **Separation of concerns:** Business logic lives in testable models/services, not views. Display-specific concerns (timing, animations, visual state) belong in views, not in models or engines. Models expose source-of-truth state; views decide when and how to reflect it visually.
 - **Small, composable units:**
   - Prefer many small types over a few large ones.
@@ -15,17 +15,12 @@ This repo is a SwiftUI iPad app: a MIDI-based piano trainer. The app plays a 1-b
 - **Simplicity:** When fixing bugs, or refactoring, prefer solutions that delete code over ones that add code without changing functionality. More code is more complexity, not less.
 - **No unnecessary comments:** Do not add comments to code unless absolutely necessary. Code should be self-documenting.
 - **Determinism:** Sequence generation must support a seed for reproducible tests.
-- **Threading:** Never block the main thread. MIDI callbacks + persistence writes must be off-main.
-- **Correctness rules (product truth):**
-  - iPad-first; local storage only (no network).
-  - MIDI out only for playback (no audio synthesis required).
-  - Melody is 1 bar in 4/4; durations sum to exactly 4 beats.
-  - **No rhythmic grading.** Only pitch/interval correctness.
-  - **Octave-sensitive** correctness (MIDI note number must match).
-  - Input matching: do not advance to the next note until the current expected note is played correctly; record every wrong attempt.
 
 ## Game flow rules
 
+- **Melody structure:** 1 bar in 4/4; durations sum to exactly 4 beats.
+- **Grading:** Pitch/interval correctness only (no rhythmic grading). Octave sensitivity is configurable via `octaveMatters` setting.
+- **Input matching:** Do not advance to the next note until the current expected note is played correctly; record every wrong attempt.
 - **Input during playback:** User can start playing the sequence as soon as playback begins (no need to wait for playback to finish).
 - **Auto-advance on success:** When the user completes a sequence with no errors, wait until all MIDI keys are released, then wait 1 beat, then automatically start the next question.
 - **Auto-replay on error:** When the user completes a sequence but made any errors, wait until all MIDI keys are released, then wait 1 beat, then replay the same sequence. Repeat until they get it perfect.

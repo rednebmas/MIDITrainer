@@ -45,6 +45,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var useOnScreenKeyboard: Bool = false
     @Published private(set) var schedulerMode: SchedulerMode = .spacedMistakes
     @Published private(set) var weaknessDebugEntries: [WeaknessEntry] = []
+    @Published private(set) var spacedMistakeClearance: Int = 3
     @Published private(set) var showChordSymbols: Bool = true
     @Published private(set) var showNoteOrbs: Bool = true
     @Published private(set) var isScanningMIDI: Bool = true
@@ -213,6 +214,11 @@ final class PracticeModel: ObservableObject {
         settingsStore.$showNoteOrbs
             .receive(on: DispatchQueue.main)
             .assign(to: \.showNoteOrbs, on: self)
+            .store(in: &cancellables)
+
+        settingsStore.$spacedMistakeClearance
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.spacedMistakeClearance, on: self)
             .store(in: &cancellables)
     }
 

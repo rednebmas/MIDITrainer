@@ -9,14 +9,7 @@ struct SchedulerDebugSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    SchedulerDebugView(
-                        mode: model.schedulerMode,
-                        spacedEntries: model.schedulerDebugEntries,
-                        weaknessEntries: model.weaknessDebugEntries,
-                        pendingCount: model.pendingMistakeCount,
-                        questionsUntilNextReask: model.questionsUntilNextReask,
-                        onClearQueue: { model.clearMistakeQueue() }
-                    )
+                    SchedulerDebugView(model: model)
 
                     CopyDebugInfoButton(showCopiedFeedback: $showCopiedFeedback) {
                         model.buildDebugInfo().formatted
@@ -60,48 +53,34 @@ private struct CopyDebugInfoButton: View {
 }
 
 struct SchedulerDebugView: View {
-    let mode: SchedulerMode
-    let spacedEntries: [SchedulerDebugEntry]
-    let weaknessEntries: [WeaknessEntry]
-    let pendingCount: Int
-    let questionsUntilNextReask: Int?
-    let onClearQueue: () -> Void
+    @ObservedObject var model: PracticeModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Mode header
             HStack {
-                Text(mode.displayName)
+                Text(model.schedulerMode.displayName)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
+                Text("Clearance: \(model.spacedMistakeClearance)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            switch mode {
+            switch model.schedulerMode {
             case .random:
                 Text("Each question is randomly generated")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
             case .spacedMistakes:
-                SpacedMistakesDebugSection(
-                    entries: spacedEntries,
-                    pendingCount: pendingCount,
-                    questionsUntilNextReask: questionsUntilNextReask,
-                    onClearQueue: onClearQueue
-                )
+                SpacedMistakesDebugSection(model: model, compact: false)
 
             case .weaknessFocused:
-                WeaknessDebugSection(entries: weaknessEntries)
+                WeaknessDebugSection(entries: model.weaknessDebugEntries)
 
-                if pendingCount > 0 {
+                if model.pendingMistakeCount > 0 {
                     Divider()
-                    SpacedMistakesDebugSection(
-                        entries: spacedEntries,
-                        pendingCount: pendingCount,
-                        questionsUntilNextReask: questionsUntilNextReask,
-                        onClearQueue: onClearQueue,
-                        compact: true
-                    )
+                    SpacedMistakesDebugSection(model: model, compact: true)
                 }
             }
         }
@@ -116,11 +95,8 @@ struct SchedulerDebugView: View {
 // MARK: - Spaced Mistakes Section
 
 private struct SpacedMistakesDebugSection: View {
-    let entries: [SchedulerDebugEntry]
-    let pendingCount: Int
-    let questionsUntilNextReask: Int?
-    let onClearQueue: () -> Void
-    var compact: Bool = false
+    @ObservedObject var model: PracticeModel
+    let compact: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -128,8 +104,8 @@ private struct SpacedMistakesDebugSection: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Re-ask Queue")
                         .font(.caption.weight(.medium))
-                    if pendingCount > 0 {
-                        if let remaining = questionsUntilNextReask, remaining > 0 {
+                    if model.pendingMistakeCount > 0 {
+                        if let remaining = model.questionsUntilNextReask, remaining > 0 {
                             Text("Next in \(remaining) question\(remaining == 1 ? "" : "s")")
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
@@ -145,17 +121,21 @@ private struct SpacedMistakesDebugSection: View {
                     }
                 }
                 Spacer()
-                if pendingCount > 0 {
+                if model.pendingMistakeCount > 0 {
                     Button("Clear") {
-                        onClearQueue()
+                        model.clearMistakeQueue()
                     }
                     .font(.caption2)
                     .buttonStyle(.bordered)
                 }
             }
 
-            if !compact && !entries.isEmpty {
-                ForEach(entries) { entry in
+            if !compact && !model.schedulerDebugEntries.isEmpty {
+                let sortedEntries = model.schedulerDebugEntries.sorted { a, b in
+                    if a.isActive != b.isActive { return a.isActive }
+                    return a.remainingUntilDue < b.remainingUntilDue
+                }
+                ForEach(sortedEntries) { entry in
                     SpacedMistakeRow(entry: entry)
                 }
             }
@@ -306,26 +286,10 @@ private struct WeaknessRow: View {
 
 #Preview {
     VStack(spacing: 20) {
-        SchedulerDebugView(
-            mode: .weaknessFocused,
-            spacedEntries: [],
-            weaknessEntries: [
-                WeaknessEntry(seed: 12345, timesAsked: 5, firstAttemptFailures: 3),
-                WeaknessEntry(seed: 67890, timesAsked: 10, firstAttemptFailures: 2)
-            ],
-            pendingCount: 1,
-            questionsUntilNextReask: 2,
-            onClearQueue: {}
-        )
-
-        SchedulerDebugView(
-            mode: .spacedMistakes,
-            spacedEntries: [],
-            weaknessEntries: [],
-            pendingCount: 0,
-            questionsUntilNextReask: nil,
-            onClearQueue: {}
-        )
+        WeaknessDebugSection(entries: [
+            WeaknessEntry(seed: 12345, timesAsked: 5, firstAttemptFailures: 3),
+            WeaknessEntry(seed: 67890, timesAsked: 10, firstAttemptFailures: 2)
+        ])
     }
     .padding()
 }
