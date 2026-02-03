@@ -73,6 +73,8 @@ final class PracticeEngine: ObservableObject {
     /// Recent input attempts for debugging (stores up to 10 most recent)
     @Published private(set) var recentAttempts: [DebugAttempt] = []
     private let maxRecentAttempts = 10
+    /// Tracks the current attempt number (1 for first try, increments on each replay)
+    @Published private(set) var currentAttemptNumber: Int = 1
 
     init(
         midiService: MIDIService,
@@ -169,6 +171,7 @@ final class PracticeEngine: ObservableObject {
             madeErrorInCurrentAttempt = false
             playbackFinished = false
             recentAttempts = []
+            currentAttemptNumber = 1
 
             DispatchQueue.main.async { [weak self] in
                 self?.state = .active(sequence: sequence, isPlayingBack: true)
@@ -324,6 +327,7 @@ final class PracticeEngine: ObservableObject {
         errorNoteIndex = nil
         madeErrorInCurrentAttempt = false
         playbackFinished = false
+        currentAttemptNumber += 1
 
         state = .active(sequence: sequence, isPlayingBack: true)
 

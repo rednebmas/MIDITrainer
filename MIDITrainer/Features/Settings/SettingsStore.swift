@@ -203,11 +203,13 @@ final class SettingsStore: ObservableObject {
     }
 
     func incrementQuestionsAnswered() {
-        checkForNewDay()
+        checkForDayRollover()
         questionsAnsweredToday += 1
     }
 
-    private func checkForNewDay() {
+    /// Checks if the day has changed since last practice and resets daily stats if so.
+    /// Call this when the app returns to foreground.
+    func checkForDayRollover() {
         let lastDate = defaults.string(forKey: lastPracticeDateKey)
         if lastDate != todayDateString {
             questionsAnsweredToday = 0

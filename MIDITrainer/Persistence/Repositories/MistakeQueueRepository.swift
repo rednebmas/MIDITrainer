@@ -10,11 +10,11 @@ final class MistakeQueueRepository {
     }
     
     /// Inserts a new mistake into the queue and returns its ID.
-    func insert(seed: UInt64, settings: PracticeSettingsSnapshot, clearance: Int = 3, now: Date = Date()) throws -> QueuedMistake {
+    func insert(seed: UInt64, settings: PracticeSettingsSnapshot, sourceName: String? = nil, clearance: Int = 3, now: Date = Date()) throws -> QueuedMistake {
         try db.readWrite { handle in
             let sql = """
-            INSERT INTO mistake_queue (seed, settingsJson, clearanceDistance, currentClearanceDistance, questionsSinceQueued, queuedAt)
-            VALUES (?, ?, ?, ?, ?, ?);
+            INSERT INTO mistake_queue (seed, settingsJson, sourceName, clearanceDistance, currentClearanceDistance, questionsSinceQueued, queuedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
             """
             var statement: OpaquePointer?
             guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -28,10 +28,15 @@ final class MistakeQueueRepository {
             let settingsData = try encoder.encode(settings)
             let settingsJson = String(data: settingsData, encoding: .utf8) ?? "{}"
             sqlite3_bind_text(statement, 2, settingsJson, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_int(statement, 3, Int32(clearance))
+            if let sourceName {
+                sqlite3_bind_text(statement, 3, sourceName, -1, SQLITE_TRANSIENT)
+            } else {
+                sqlite3_bind_null(statement, 3)
+            }
             sqlite3_bind_int(statement, 4, Int32(clearance))
-            sqlite3_bind_int(statement, 5, 0)
-            sqlite3_bind_double(statement, 6, now.timeIntervalSince1970)
+            sqlite3_bind_int(statement, 5, Int32(clearance))
+            sqlite3_bind_int(statement, 6, 0)
+            sqlite3_bind_double(statement, 7, now.timeIntervalSince1970)
 
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw DatabaseError.statementFailed(message: "Failed to insert mistake_queue")
@@ -42,6 +47,7 @@ final class MistakeQueueRepository {
                 id: id,
                 seed: seed,
                 settings: settings,
+                sourceName: sourceName,
                 minimumClearanceDistance: clearance,
                 currentClearanceDistance: clearance,
                 questionsSinceQueued: 0,
@@ -54,7 +60,7 @@ final class MistakeQueueRepository {
     func loadAll() throws -> [QueuedMistake] {
         try db.readWrite { handle in
             let sql = """
-            SELECT id, seed, settingsJson, clearanceDistance, currentClearanceDistance, questionsSinceQueued, queuedAt
+            SELECT id, seed, settingsJson, sourceName, clearanceDistance, currentClearanceDistance, questionsSinceQueued, queuedAt
             FROM mistake_queue
             ORDER BY queuedAt ASC;
             """
@@ -63,29 +69,37 @@ final class MistakeQueueRepository {
                 throw DatabaseError.statementFailed(message: "Failed to prepare mistake_queue select")
             }
             defer { sqlite3_finalize(statement) }
-            
+
             var mistakes: [QueuedMistake] = []
             let decoder = JSONDecoder()
-            
+
             while sqlite3_step(statement) == SQLITE_ROW {
                 let id = sqlite3_column_int64(statement, 0)
                 let seedBits = sqlite3_column_int64(statement, 1)
                 let seed = UInt64(bitPattern: seedBits)
-                
+
                 guard let jsonPtr = sqlite3_column_text(statement, 2) else { continue }
                 let jsonString = String(cString: jsonPtr)
                 guard let jsonData = jsonString.data(using: .utf8),
                       let settings = try? decoder.decode(PracticeSettingsSnapshot.self, from: jsonData) else { continue }
-                
-                let clearanceDistance = Int(sqlite3_column_int(statement, 3))
-                let currentClearanceDistance = Int(sqlite3_column_int(statement, 4))
-                let questionsSinceQueued = Int(sqlite3_column_int(statement, 5))
-                let queuedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 6))
-                
+
+                let sourceName: String?
+                if let sourceNamePtr = sqlite3_column_text(statement, 3) {
+                    sourceName = String(cString: sourceNamePtr)
+                } else {
+                    sourceName = nil
+                }
+
+                let clearanceDistance = Int(sqlite3_column_int(statement, 4))
+                let currentClearanceDistance = Int(sqlite3_column_int(statement, 5))
+                let questionsSinceQueued = Int(sqlite3_column_int(statement, 6))
+                let queuedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 7))
+
                 let mistake = QueuedMistake(
                     id: id,
                     seed: seed,
                     settings: settings,
+                    sourceName: sourceName,
                     minimumClearanceDistance: clearanceDistance,
                     currentClearanceDistance: currentClearanceDistance,
                     questionsSinceQueued: questionsSinceQueued,
@@ -93,7 +107,7 @@ final class MistakeQueueRepository {
                 )
                 mistakes.append(mistake)
             }
-            
+
             return mistakes
         }
     }

@@ -10,12 +10,15 @@ struct QueuedMistake: Equatable, Codable {
     
     /// Unique identifier for this queued entry (database row ID).
     let id: Int64
-    
+
     /// The seed used to regenerate the exact same sequence.
     let seed: UInt64
-    
+
     /// The settings snapshot used to generate the sequence (captured at queue time).
     let settings: PracticeSettingsSnapshot
+
+    /// Human-readable name of the melody source (e.g., "Art Pepper - Anthropology").
+    let sourceName: String?
     
     /// The minimum number of fresh questions required before this can be cleared.
     var minimumClearanceDistance: Int
@@ -35,21 +38,23 @@ struct QueuedMistake: Equatable, Codable {
     let queuedAt: Date
     
     /// Creates a new queued mistake with default initial values.
-    init(id: Int64, seed: UInt64, settings: PracticeSettingsSnapshot, queuedAt: Date = Date()) {
+    init(id: Int64, seed: UInt64, settings: PracticeSettingsSnapshot, sourceName: String? = nil, queuedAt: Date = Date()) {
         self.id = id
         self.seed = seed
         self.settings = settings
+        self.sourceName = sourceName
         self.minimumClearanceDistance = Self.initialClearanceDistance
         self.currentClearanceDistance = Self.initialClearanceDistance
         self.questionsSinceQueued = 0
         self.queuedAt = queuedAt
     }
-    
+
     /// Creates a queued mistake with all values specified (for loading from persistence).
     init(
         id: Int64,
         seed: UInt64,
         settings: PracticeSettingsSnapshot,
+        sourceName: String?,
         minimumClearanceDistance: Int,
         currentClearanceDistance: Int,
         questionsSinceQueued: Int,
@@ -58,6 +63,7 @@ struct QueuedMistake: Equatable, Codable {
         self.id = id
         self.seed = seed
         self.settings = settings
+        self.sourceName = sourceName
         self.minimumClearanceDistance = minimumClearanceDistance
         self.currentClearanceDistance = currentClearanceDistance
         self.questionsSinceQueued = questionsSinceQueued

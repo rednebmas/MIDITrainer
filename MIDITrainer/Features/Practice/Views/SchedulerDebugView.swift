@@ -190,7 +190,7 @@ private struct SpacedMistakeRow: View {
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(statusColor)
 
-                Text("\(entry.questionsSinceQueued)/\(entry.currentClearanceDistance) answered")
+                Text(progressDescription)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -220,6 +220,20 @@ private struct SpacedMistakeRow: View {
         if entry.isActive { return .green }
         if entry.isDue { return .orange }
         return .blue
+    }
+
+    private var progressDescription: String {
+        // Clearance increment is 3, so fail count = (min - 3) / 3
+        // Initial clearance is 3, first fail bumps to 6, second to 9, etc.
+        let failCount = max(0, (entry.minimumClearanceDistance - 3) / 3)
+        let remaining = entry.currentClearanceDistance - entry.questionsSinceQueued
+
+        if failCount == 0 {
+            return remaining > 0 ? "\(remaining) to go" : "Ready"
+        } else {
+            let failText = "Failed \(failCount)x"
+            return remaining > 0 ? "\(failText) • \(remaining) to go" : "\(failText) • Ready"
+        }
     }
 }
 

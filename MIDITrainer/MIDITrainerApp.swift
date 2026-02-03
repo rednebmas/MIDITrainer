@@ -29,6 +29,7 @@ struct MIDITrainerApp: App {
             if newPhase == .active {
                 print("[MIDI] App became active - refreshing endpoints")
                 midiService.refreshEndpoints()
+                settingsStore.checkForDayRollover()
             }
         }
     }

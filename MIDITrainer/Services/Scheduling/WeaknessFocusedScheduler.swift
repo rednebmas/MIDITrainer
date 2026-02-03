@@ -39,13 +39,13 @@ final class WeaknessFocusedScheduler: QuestionScheduler {
         return .fresh
     }
 
-    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?) {
+    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {
         // Delegate to spaced scheduler for immediate queue management
         // Historical weakness data comes from existing note_attempt table (no extra recording needed)
 
         // For weakness-selected questions (mistakeId == -1), treat as fresh for the spaced scheduler
         let actualMistakeId = mistakeId == -1 ? nil : mistakeId
-        spacedScheduler.recordCompletion(seed: seed, settings: settings, hadErrors: hadErrors, mistakeId: actualMistakeId)
+        spacedScheduler.recordCompletion(seed: seed, settings: settings, hadErrors: hadErrors, mistakeId: actualMistakeId, sourceName: sourceName)
     }
 
     private func selectWeightedWeakness(for settings: PracticeSettingsSnapshot) -> WeaknessEntry? {

@@ -50,6 +50,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var isScanningMIDI: Bool = true
     @Published private(set) var currentDeviceSettings: DeviceSettings?
     @Published private(set) var keysAreHeld: Bool = false
+    @Published private(set) var currentAttemptNumber: Int = 1
 
     var isMidiConnected: Bool {
         if useOnScreenKeyboard { return true }
@@ -516,6 +517,11 @@ final class PracticeModel: ObservableObject {
         engine.$keysAreHeld
             .receive(on: DispatchQueue.main)
             .assign(to: \.keysAreHeld, on: self)
+            .store(in: &cancellables)
+
+        engine.$currentAttemptNumber
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.currentAttemptNumber, on: self)
             .store(in: &cancellables)
     }
 

@@ -6,21 +6,19 @@ final class PianoSamplePlayer {
     private let audioEngine = AVAudioEngine()
     private let mixer = AVAudioMixerNode()
     private var sampleBuffers: [UInt8: AVAudioPCMBuffer] = [:]
-    private var activePlayers: [AVAudioPlayerNode] = []
     private let playerPool: [AVAudioPlayerNode]
-    private var nextPlayerIndex = 0
-    private let poolSize = 16  // Support up to 16 simultaneous notes
+    private var voiceStartTimes: [Date?]
+    private let poolSize = 16
 
     private let noteNames = ["C", "Cs", "D", "Ds", "E", "F", "Fs", "G", "Gs", "A", "As", "B"]
 
     init() {
-        // Create player pool
         var players: [AVAudioPlayerNode] = []
         for _ in 0..<poolSize {
-            let player = AVAudioPlayerNode()
-            players.append(player)
+            players.append(AVAudioPlayerNode())
         }
         self.playerPool = players
+        self.voiceStartTimes = Array(repeating: nil, count: poolSize)
 
         setupAudioEngine()
         loadSamples()
@@ -105,22 +103,34 @@ final class PianoSamplePlayer {
     }
 
     private func playBuffer(_ buffer: AVAudioPCMBuffer, velocity: UInt8) {
-        // Get next player from pool (round-robin)
-        let player = playerPool[nextPlayerIndex]
-        nextPlayerIndex = (nextPlayerIndex + 1) % poolSize
+        let voiceIndex = selectVoice()
+        let player = playerPool[voiceIndex]
 
-        // Stop if already playing
         if player.isPlaying {
             player.stop()
         }
 
-        // Calculate volume based on velocity (0-127)
-        let volume = Float(velocity) / 127.0
-
-        // Schedule and play
-        player.volume = volume
-        player.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+        voiceStartTimes[voiceIndex] = Date()
+        player.volume = Float(velocity) / 127.0
+        player.scheduleBuffer(buffer, at: nil, options: [])
         player.play()
+    }
+
+    private func selectVoice() -> Int {
+        for i in 0..<poolSize {
+            if !playerPool[i].isPlaying {
+                return i
+            }
+        }
+        var oldestIndex = 0
+        var oldestTime = Date.distantFuture
+        for i in 0..<poolSize {
+            if let startTime = voiceStartTimes[i], startTime < oldestTime {
+                oldestTime = startTime
+                oldestIndex = i
+            }
+        }
+        return oldestIndex
     }
 
     private func findNearestSample(for midiNote: UInt8) -> AVAudioPCMBuffer? {

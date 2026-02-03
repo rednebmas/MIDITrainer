@@ -67,20 +67,22 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         // Find the first due mistake (FIFO order, already sorted by queuedAt)
         if let dueIndex = queue.firstIndex(where: { $0.isDue }) {
             let mistake = queue[dueIndex]
-            return .reask(seed: mistake.seed, settings: mistake.settings, mistakeId: mistake.id)
+            // Use currentSettings so the mistake transposes to the current key
+            // The seed determines the phrase (interval pattern), settings determine the key
+            return .reask(seed: mistake.seed, settings: currentSettings, mistakeId: mistake.id)
         }
-        
+
         // No due mistakes, return fresh
         return .fresh
     }
     
-    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?) {
+    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {
         if let mistakeId = mistakeId {
             incrementCounters(excluding: mistakeId)
             handleReaskCompletion(mistakeId: mistakeId, hadErrors: hadErrors)
         } else {
             incrementCounters()
-            handleFreshCompletion(seed: seed, settings: settings, hadErrors: hadErrors)
+            handleFreshCompletion(seed: seed, settings: settings, hadErrors: hadErrors, sourceName: sourceName)
         }
     }
     
@@ -95,11 +97,11 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         }
     }
     
-    private func handleFreshCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool) {
+    private func handleFreshCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, sourceName: String?) {
         // If the fresh question had errors, add it to the queue
         if hadErrors {
             do {
-                let mistake = try repository.insert(seed: seed, settings: settings, clearance: clearance)
+                let mistake = try repository.insert(seed: seed, settings: settings, sourceName: sourceName, clearance: clearance)
                 queue.append(mistake)
             } catch {
                 // Log error but continue

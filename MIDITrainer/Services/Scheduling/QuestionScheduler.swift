@@ -21,7 +21,8 @@ protocol QuestionScheduler: AnyObject {
     ///   - settings: The settings used to generate the sequence.
     ///   - hadErrors: Whether any errors were made during the attempt.
     ///   - mistakeId: If this was a re-ask, the ID of the mistake entry (nil for fresh questions).
-    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?)
+    ///   - sourceName: Human-readable name of the melody source (e.g., "Art Pepper - Anthropology").
+    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?)
     
     /// The number of pending mistakes in the queue.
     var pendingCount: Int { get }
@@ -42,7 +43,7 @@ final class RandomScheduler: QuestionScheduler {
         .fresh
     }
     
-    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?) {
+    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {
         // Random mode doesn't track anything
     }
     

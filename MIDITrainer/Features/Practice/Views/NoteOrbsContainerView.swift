@@ -99,6 +99,21 @@ struct NoteOrbsContainerView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
+
+                    #if DEBUG
+                    HStack(spacing: 4) {
+                        if model.isReplaying {
+                            Text("Replay #\(model.currentAttemptNumber)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text("NEW")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    .padding(.top, 4)
+                    #endif
                 }
                 .padding(.top, 8)
             } else {
