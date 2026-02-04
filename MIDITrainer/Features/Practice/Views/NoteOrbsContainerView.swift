@@ -106,6 +106,10 @@ struct NoteOrbsContainerView: View {
                             Text("Replay #\(model.currentAttemptNumber)")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.orange)
+                        } else if let failures = model.activeMistakeTotalFailures {
+                            Text("Retry #\(failures)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.yellow)
                         } else {
                             Text("NEW")
                                 .font(.caption2.weight(.semibold))

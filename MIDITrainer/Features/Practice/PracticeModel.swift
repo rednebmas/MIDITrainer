@@ -48,6 +48,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var currentDeviceSettings: DeviceSettings?
     @Published private(set) var keysAreHeld: Bool = false
     @Published private(set) var currentAttemptNumber: Int = 1
+    @Published private(set) var activeMistakeTotalFailures: Int?
 
     var isMidiConnected: Bool {
         if useOnScreenKeyboard { return true }
@@ -244,6 +245,7 @@ final class PracticeModel: ObservableObject {
                 SchedulerDebugEntry(mistake: mistake, isActive: mistake.id == activeId)
             }
             self?.schedulerDebugEntries = entries
+            self?.activeMistakeTotalFailures = queue.first { $0.id == activeId }?.totalFailures
         }
         .store(in: &cancellables)
     }
