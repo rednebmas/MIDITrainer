@@ -20,7 +20,7 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
         let scheduler = SpacedMistakeScheduler(repository: repository)
         let settings = makeSettings()
         
-        scheduler.recordCompletion(seed: 123, settings: settings, hadErrors: true, mistakeId: nil)
+        scheduler.recordCompletion(seed: 123, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
         
         guard let mistake = scheduler.queueSnapshot.first else {
             XCTFail("Expected mistake to be queued")

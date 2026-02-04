@@ -37,7 +37,10 @@ final class StatsRepositoryTests: XCTestCase {
             excludedDegrees: settings.excludedDegrees,
             allowedOctaves: settings.allowedOctaves,
             bpm: settings.bpm,
-            seed: 99
+            seed: 99,
+            sourceId: nil,
+            sourceTitle: nil,
+            chords: nil
         )
 
         let ids = try sequenceRepo.insert(sequence: sequence, sessionId: sessionId, settingsSnapshotId: snapshotId)
@@ -165,7 +168,10 @@ final class StatsRepositoryTests: XCTestCase {
             excludedDegrees: settingsA.excludedDegrees,
             allowedOctaves: settingsA.allowedOctaves,
             bpm: settingsA.bpm,
-            seed: 1
+            seed: 1,
+            sourceId: nil,
+            sourceTitle: nil,
+            chords: nil
         )
         let ids1 = try sequenceRepo.insert(sequence: sequence1, sessionId: sessionA, settingsSnapshotId: snapshotA)
 
@@ -214,7 +220,10 @@ final class StatsRepositoryTests: XCTestCase {
             excludedDegrees: settingsA.excludedDegrees,
             allowedOctaves: settingsA.allowedOctaves,
             bpm: settingsA.bpm,
-            seed: 2
+            seed: 2,
+            sourceId: nil,
+            sourceTitle: nil,
+            chords: nil
         )
         let ids2 = try sequenceRepo.insert(sequence: sequence2, sessionId: sessionA, settingsSnapshotId: snapshotA)
 
@@ -262,7 +271,10 @@ final class StatsRepositoryTests: XCTestCase {
             excludedDegrees: settingsB.excludedDegrees,
             allowedOctaves: settingsB.allowedOctaves,
             bpm: settingsB.bpm,
-            seed: 3
+            seed: 3,
+            sourceId: nil,
+            sourceTitle: nil,
+            chords: nil
         )
 
         let idsOther = try sequenceRepo.insert(sequence: sequenceOther, sessionId: sessionB, settingsSnapshotId: snapshotB)
@@ -324,7 +336,10 @@ final class StatsRepositoryTests: XCTestCase {
                 excludedDegrees: settings.excludedDegrees,
                 allowedOctaves: settings.allowedOctaves,
                 bpm: settings.bpm,
-                seed: UInt64(i)
+                seed: UInt64(i),
+                sourceId: nil,
+                sourceTitle: nil,
+                chords: nil
             )
             let ids = try sequenceRepo.insert(sequence: sequence, sessionId: session, settingsSnapshotId: snapshot)
 
