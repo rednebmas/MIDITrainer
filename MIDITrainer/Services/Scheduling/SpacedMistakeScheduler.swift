@@ -6,13 +6,13 @@ import Foundation
 /// - When a sequence is answered incorrectly, it's added to the queue with clearance distance 3.
 /// - After finishing an incorrect sequence, a fresh question is always asked next.
 /// - After the required number of fresh questions, the mistake is re-asked.
-/// - If answered correctly on re-ask and current >= min, it's removed from the queue.
-/// - If answered correctly but current < min, current is pushed up to min for another round.
-/// - If answered incorrectly on re-ask, min increases by 3, current resets to 3 (see it again soon).
+/// - If answered correctly on re-ask and current > min, it's removed from the queue.
+/// - If answered correctly but current <= min, current increases by clearance for another round.
+/// - If answered incorrectly on re-ask, both min and current increase by clearance.
 ///
 /// Two distances are tracked:
-/// - minimumClearanceDistance: the eventual spacing needed to clear the item (increases by 3 on each failed re-ask).
-/// - currentClearanceDistance: the immediate spacing before the next re-ask (resets to 3 on failure, pushed to min on success).
+/// - minimumClearanceDistance: the eventual spacing needed to clear the item (increases by clearance on each failed re-ask).
+/// - currentClearanceDistance: the spacing before the next re-ask (increases by clearance on both failure and success).
 final class SpacedMistakeScheduler: QuestionScheduler {
     private let repository: MistakeQueueRepository
     private let clearanceProvider: () -> Int
@@ -113,10 +113,10 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         guard let index = queue.firstIndex(where: { $0.id == mistakeId }) else { return }
 
         if hadErrors {
-            // Failed the re-ask: bump minimum clearance, reset current to clearance so they see it again soon
+            // Failed the re-ask: bump both minimum and current clearance so spacing grows
             var mistake = queue[index]
             mistake.minimumClearanceDistance += clearance
-            mistake.currentClearanceDistance = clearance
+            mistake.currentClearanceDistance += clearance
             mistake.questionsSinceQueued = 0
             queue[index] = mistake
             
@@ -131,10 +131,10 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                 // Log error but continue
             }
         } else {
-            // Passed the re-ask: clear if we satisfied the minimum, otherwise push out to the minimum spacing.
+            // Passed the re-ask: clear if current exceeds min, otherwise bump current so next pass clears.
             var mistake = queue[index]
             mistake.questionsSinceQueued = 0
-            if mistake.currentClearanceDistance >= mistake.minimumClearanceDistance {
+            if mistake.currentClearanceDistance > mistake.minimumClearanceDistance {
                 queue.remove(at: index)
                 do {
                     try repository.delete(id: mistakeId)
@@ -142,7 +142,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                     // Log error but continue
                 }
             } else {
-                mistake.currentClearanceDistance = mistake.minimumClearanceDistance
+                mistake.currentClearanceDistance += clearance
                 queue[index] = mistake
                 do {
                     try repository.update(
