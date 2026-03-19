@@ -12,6 +12,9 @@ final class StatsModel: ObservableObject {
     @Published var noteIndexBuckets: [StatBucket] = []
     @Published var resetError: String?
     @Published var firstTryAccuracy: FirstTryAccuracy?
+    @Published var recoveryStats: RecoveryStats?
+    @Published var recoveryTrend: [TrendPoint] = []
+    @Published var recoveryDistribution: [StatBucket] = []
     @Published var scope: Scope = .allKeys {
         didSet {
             refresh()
@@ -46,12 +49,18 @@ final class StatsModel: ObservableObject {
             let intervals = (try? self.statsRepository.mistakeRateByInterval(filter: filter)) ?? []
             let noteIndexes = (try? self.statsRepository.mistakeRateByNoteIndex(filter: filter)) ?? []
             let firstTry = try? self.statsRepository.firstTryAccuracy(for: self.currentSettings, limit: 20)
+            let recovery = try? self.statsRepository.recoveryStats(filter: filter)
+            let trend = (try? self.statsRepository.recoveryTrend(filter: filter)) ?? []
+            let distribution = (try? self.statsRepository.recoveryDistribution(filter: filter)) ?? []
 
             DispatchQueue.main.async {
                 self.degreeBuckets = degrees
                 self.intervalBuckets = intervals
                 self.noteIndexBuckets = noteIndexes
                 self.firstTryAccuracy = firstTry
+                self.recoveryStats = recovery
+                self.recoveryTrend = trend
+                self.recoveryDistribution = distribution
             }
         }
     }

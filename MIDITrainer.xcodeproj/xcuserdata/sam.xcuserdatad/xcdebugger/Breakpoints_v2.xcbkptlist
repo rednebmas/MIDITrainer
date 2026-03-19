@@ -8,7 +8,7 @@
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
             uuid = "AC1F252D-112A-4DCE-86EF-33312DDF7669"
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "MIDITrainer/Services/MIDI/CoreMIDIAdapter.swift"
@@ -17,6 +17,22 @@
             startingLineNumber = "299"
             endingLineNumber = "299"
             landmarkName = "notificationName(_:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "3A4BB3E0-7C8A-405C-BB51-D80BBEF83CA4"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "MIDITrainer/Services/MIDI/CoreMIDIAdapter.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "270"
+            endingLineNumber = "270"
+            landmarkName = "handleNotification(_:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

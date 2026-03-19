@@ -54,6 +54,8 @@ final class PracticeEngine: ObservableObject {
     @Published private(set) var madeErrorInCurrentAttempt: Bool = false
     /// Whether playback has finished (user can still input during playback)
     private var playbackFinished: Bool = false
+    /// Tracks correct notes that have been pressed but not yet released
+    private var pendingCorrectNoteNumbers: Set<UInt8> = []
     /// Tracks currently held MIDI notes for detecting when all keys are released
     private var heldNotes: Set<UInt8> = [] {
         didSet { keysAreHeld = !heldNotes.isEmpty }
@@ -170,6 +172,7 @@ final class PracticeEngine: ObservableObject {
             errorNoteIndex = nil
             madeErrorInCurrentAttempt = false
             playbackFinished = false
+            pendingCorrectNoteNumbers.removeAll()
             recentAttempts = []
             currentAttemptNumber = 1
 
@@ -195,6 +198,9 @@ final class PracticeEngine: ObservableObject {
                     self.handle(noteOn: noteNumber)
                 case .noteOff(let noteNumber):
                     self.heldNotes.remove(noteNumber)
+                    if self.pendingCorrectNoteNumbers.remove(noteNumber) != nil {
+                        self.errorNoteIndex = nil
+                    }
                     self.checkPendingCompletionAction()
                 }
             }
@@ -256,17 +262,15 @@ final class PracticeEngine: ObservableObject {
         persistAttempt(descriptor: descriptor, sequence: sequence, noteIndex: currentInputIndex)
 
         if isCorrect {
-            errorNoteIndex = nil
+            pendingCorrectNoteNumbers.insert(noteNumber)
             lastCorrectExpected = expectedNote.midiNoteNumber
             lastCorrectGuessed = noteNumber
             currentInputIndex += 1
 
             if currentInputIndex >= sequence.notes.count {
-                // User finished the sequence
                 if playbackFinished {
                     handleSequenceCompleted(sequence: sequence, settings: activeSession?.settings)
                 }
-                // If playback hasn't finished, the completion callback will handle it
             }
         } else {
             // Record that an error was made
@@ -280,8 +284,6 @@ final class PracticeEngine: ObservableObject {
         // Stop chord looping when sequence completes
         playbackScheduler.stopChordLoop()
 
-        state = .completed(sequence: sequence, hadErrors: hadErrorsInSequence)
-
         // Notify the scheduler of the completion (only once per sequence, not on replays)
         if !hasRecordedCompletion, let seed = currentSeed, let settings = settings {
             hasRecordedCompletion = true
@@ -293,11 +295,12 @@ final class PracticeEngine: ObservableObject {
                 sourceName: sequence.sourceName
             )
         }
-        
+
         let delaySeconds = settings.map { 60.0 / Double($0.bpm) } ?? 0.5
-        
+
         let action: () -> Void = { [weak self] in
             guard let self else { return }
+            self.state = .completed(sequence: sequence, hadErrors: self.hadErrorsInSequence)
             DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
                 guard let self else { return }
                 if self.madeErrorInCurrentAttempt {
@@ -327,6 +330,7 @@ final class PracticeEngine: ObservableObject {
         errorNoteIndex = nil
         madeErrorInCurrentAttempt = false
         playbackFinished = false
+        pendingCorrectNoteNumbers.removeAll()
         currentAttemptNumber += 1
 
         state = .active(sequence: sequence, isPlayingBack: true)

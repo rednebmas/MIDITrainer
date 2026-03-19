@@ -21,6 +21,14 @@ struct StatsView: View {
                 
                 FirstTrySection(firstTry: model.firstTryAccuracy)
 
+                RecoverySection(recovery: model.recoveryStats)
+
+                RecoveryTrendSection(trend: model.recoveryTrend)
+
+                NavigationLink("Recovery distribution") {
+                    RecoveryDistributionView(buckets: model.recoveryDistribution)
+                }
+
                 StatsChartSection(
                     title: "Mistake rate by degree",
                     buckets: model.degreeBuckets,
@@ -145,6 +153,16 @@ private struct StatsChartSection: View {
                             Text("\(bucket.total)")
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(values: .automatic) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) {
+                                Text(v, format: .percent.precision(.fractionLength(0)))
+                            }
                         }
                     }
                 }

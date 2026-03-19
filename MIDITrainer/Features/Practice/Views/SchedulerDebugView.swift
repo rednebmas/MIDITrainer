@@ -1,21 +1,43 @@
 import SwiftUI
 
+private enum DebugTab: String, CaseIterable {
+    case queue = "Queue"
+    case history = "History"
+}
+
 struct SchedulerDebugSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: PracticeModel
     @State private var showCopiedFeedback = false
+    @State private var selectedTab: DebugTab = .queue
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    SchedulerDebugView(model: model)
-
-                    CopyDebugInfoButton(showCopiedFeedback: $showCopiedFeedback) {
-                        model.buildDebugInfo().formatted
+            VStack(spacing: 0) {
+                Picker("View", selection: $selectedTab) {
+                    ForEach(DebugTab.allCases, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
                     }
                 }
-                .padding()
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.top, 8)
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        switch selectedTab {
+                        case .queue:
+                            SchedulerDebugView(model: model)
+                        case .history:
+                            HistoryDebugView(model: model)
+                        }
+
+                        CopyDebugInfoButton(showCopiedFeedback: $showCopiedFeedback) {
+                            model.buildDebugInfo().formatted
+                        }
+                    }
+                    .padding()
+                }
             }
             .navigationTitle("Debug")
             .navigationBarTitleDisplayMode(.inline)
@@ -276,6 +298,135 @@ private struct WeaknessRow: View {
                 .fill(Color.orange.opacity(0.6))
                 .frame(width: CGFloat(min(probability, 100)) * 0.4, height: 6)
         }
+    }
+}
+
+// MARK: - History Section
+
+private struct HistoryDebugView: View {
+    @ObservedObject var model: PracticeModel
+
+    private var queueLookup: [UInt64: SchedulerDebugEntry] {
+        Dictionary(uniqueKeysWithValues: model.schedulerDebugEntries.map { ($0.mistake.seed, $0) })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Question History")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(model.sequenceHistory.count) recent")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if model.sequenceHistory.isEmpty {
+                Text("No questions answered yet")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.sequenceHistory) { entry in
+                    HistoryEntryRow(
+                        entry: entry,
+                        keyRoot: model.settings.key.root,
+                        queueEntry: entry.seed.flatMap { queueLookup[$0] }
+                    )
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.primary.opacity(0.05))
+        )
+    }
+}
+
+private struct HistoryEntryRow: View {
+    let entry: SequenceHistoryEntry
+    let keyRoot: NoteName
+    let queueEntry: SchedulerDebugEntry?
+
+    private var shortSeed: String {
+        guard let seed = entry.seed else { return "----" }
+        return String(format: "%04d", seed % 10000)
+    }
+
+    private var notesString: String {
+        entry.midiNotes.map { midiNoteToName($0) }.joined(separator: " ")
+    }
+
+    private var displayName: String {
+        entry.sourceName ?? notesString
+    }
+
+    private var hasSourceName: Bool {
+        entry.sourceName != nil
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("#\(shortSeed)")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 18)
+                .background(entry.wasCorrectFirstTry ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayName)
+                    .font(.system(size: 11, design: hasSourceName ? .default : .monospaced))
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    Text(timeAgo(from: entry.createdAt))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if !entry.wasCorrectFirstTry {
+                        if let queueEntry {
+                            Text("•")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(reaskDescription(for: queueEntry))
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: entry.wasCorrectFirstTry ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(entry.wasCorrectFirstTry ? .green : .red)
+        }
+    }
+
+    private func reaskDescription(for queueEntry: SchedulerDebugEntry) -> String {
+        if queueEntry.isActive {
+            return "Retrying now"
+        }
+        let remaining = queueEntry.remainingUntilDue
+        if remaining <= 0 {
+            return "Re-ask ready"
+        }
+        return "Re-ask in \(remaining)"
+    }
+
+    private func midiNoteToName(_ midi: UInt8) -> String {
+        let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let noteIndex = Int(midi) % 12
+        let octave = Int(midi) / 12 - 1
+        return "\(noteNames[noteIndex])\(octave)"
+    }
+
+    private func timeAgo(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

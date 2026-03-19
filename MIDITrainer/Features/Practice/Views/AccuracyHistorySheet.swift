@@ -102,9 +102,9 @@ private struct HistoryEntryRow: View {
 #Preview {
     AccuracyHistorySheet(
         entries: [
-            SequenceHistoryEntry(id: 1, midiNotes: [60, 62, 64, 65], wasCorrectFirstTry: true, createdAt: Date().addingTimeInterval(-60)),
-            SequenceHistoryEntry(id: 2, midiNotes: [67, 69, 71, 72], wasCorrectFirstTry: false, createdAt: Date().addingTimeInterval(-120)),
-            SequenceHistoryEntry(id: 3, midiNotes: [60, 64, 67, 72], wasCorrectFirstTry: true, createdAt: Date().addingTimeInterval(-300)),
+            SequenceHistoryEntry(id: 1, seed: 12345, sourceName: "Art Pepper - Anthropology", midiNotes: [60, 62, 64, 65], wasCorrectFirstTry: true, createdAt: Date().addingTimeInterval(-60)),
+            SequenceHistoryEntry(id: 2, seed: 67890, sourceName: nil, midiNotes: [67, 69, 71, 72], wasCorrectFirstTry: false, createdAt: Date().addingTimeInterval(-120)),
+            SequenceHistoryEntry(id: 3, seed: nil, sourceName: "Billboard 1985: Take On Me", midiNotes: [60, 64, 67, 72], wasCorrectFirstTry: true, createdAt: Date().addingTimeInterval(-300)),
         ],
         keyRoot: .c
     )

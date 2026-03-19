@@ -11,3 +11,13 @@ struct ConfusionBucket: Equatable {
     let guessedLabel: String
     let count: Int
 }
+
+struct RecoveryStats {
+    let averageAttempts: Double
+    let totalRecoveries: Int
+}
+
+struct TrendPoint: Identifiable {
+    let id: Int
+    let value: Double
+}

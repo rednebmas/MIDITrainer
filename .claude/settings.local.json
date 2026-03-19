@@ -30,7 +30,13 @@
       "Bash(xcrun simctl install:*)",
       "Bash(xcrun simctl launch:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(grep:*)",
+      "Bash(git -C /Users/sam/code/ios/MIDITrainer status --short MIDITrainerTests/SpacedMistakeSchedulerTests.swift)",
+      "Bash(git -C /Users/sam/code/ios/MIDITrainer status --short)",
+      "Bash(xcrun devicectl device process launch:*)",
+      "Bash(xcrun devicectl device install app:*)",
+      "Bash(xcrun devicectl list devices:*)"
     ]
   }
 }

@@ -18,6 +18,8 @@ struct FirstTryAccuracy {
 
 struct SequenceHistoryEntry: Identifiable {
     let id: Int64
+    let seed: UInt64?
+    let sourceName: String?
     let midiNotes: [UInt8]
     let wasCorrectFirstTry: Bool
     let createdAt: Date
@@ -34,7 +36,7 @@ struct WeaknessEntry: Equatable {
 }
 
 final class StatsRepository {
-    private let db: Database
+    let db: Database
 
     init(db: Database) {
         self.db = db
@@ -45,7 +47,7 @@ final class StatsRepository {
             selectLabel: "expectedScaleDegree",
             labelMapper: { labelValue in
                 guard let raw = Int(labelValue) else { return "?" }
-                return "Degree \(raw)"
+                return "\(raw)"
             },
             filter: filter,
             whereClause: "expectedScaleDegree IS NOT NULL"
@@ -69,9 +71,9 @@ final class StatsRepository {
             selectLabel: "noteIndexInMelody",
             labelMapper: { value in
                 if let intValue = Int(value) {
-                    return "Note \(intValue + 1)"
+                    return "\(intValue + 1)"
                 }
-                return "Note \(value)"
+                return value
             },
             filter: filter,
             whereClause: "1=1"
@@ -181,10 +183,10 @@ final class StatsRepository {
             let excluded = try encode(degrees: settings.excludedDegrees)
             let allowed = try encode(octaves: settings.allowedOctaves)
 
-            // First, get the sequence IDs, their creation dates, and whether they had mistakes
+            // First, get the sequence IDs, their creation dates, seed, sourceName, and whether they had mistakes
             let sequencesSql = """
             WITH filtered AS (
-                SELECT ms.id, ms.createdAt
+                SELECT ms.id, ms.createdAt, ms.seed, ms.sourceName
                 FROM melody_sequence ms
                 JOIN settings_snapshot ss ON ms.settingsSnapshotId = ss.id
                 WHERE ss.keyRoot = ?
@@ -201,7 +203,7 @@ final class StatsRepository {
                 FROM note_attempt
                 GROUP BY sequenceId
             )
-            SELECT filtered.id, filtered.createdAt, COALESCE(mistakes.mistakeCount, 0) as mistakeCount
+            SELECT filtered.id, filtered.createdAt, filtered.seed, filtered.sourceName, COALESCE(mistakes.mistakeCount, 0) as mistakeCount
             FROM filtered
             LEFT JOIN mistakes ON mistakes.sequenceId = filtered.id
             ORDER BY filtered.createdAt DESC;
@@ -221,12 +223,18 @@ final class StatsRepository {
             sqlite3_bind_int(sequencesStmt, 6, Int32(settings.bpm))
             sqlite3_bind_int(sequencesStmt, 7, Int32(max(limit, 0)))
 
-            var sequenceData: [(id: Int64, createdAt: Double, wasCorrect: Bool)] = []
+            var sequenceData: [(id: Int64, createdAt: Double, seed: UInt64?, sourceName: String?, wasCorrect: Bool)] = []
             while sqlite3_step(sequencesStmt) == SQLITE_ROW {
                 let id = sqlite3_column_int64(sequencesStmt, 0)
                 let createdAt = sqlite3_column_double(sequencesStmt, 1)
-                let mistakeCount = sqlite3_column_int(sequencesStmt, 2)
-                sequenceData.append((id: id, createdAt: createdAt, wasCorrect: mistakeCount == 0))
+                let seed: UInt64? = sqlite3_column_type(sequencesStmt, 2) != SQLITE_NULL
+                    ? UInt64(bitPattern: sqlite3_column_int64(sequencesStmt, 2))
+                    : nil
+                let sourceName: String? = sqlite3_column_type(sequencesStmt, 3) != SQLITE_NULL
+                    ? String(cString: sqlite3_column_text(sequencesStmt, 3))
+                    : nil
+                let mistakeCount = sqlite3_column_int(sequencesStmt, 4)
+                sequenceData.append((id: id, createdAt: createdAt, seed: seed, sourceName: sourceName, wasCorrect: mistakeCount == 0))
             }
 
             // Now fetch notes for each sequence
@@ -253,6 +261,8 @@ final class StatsRepository {
 
                 entries.append(SequenceHistoryEntry(
                     id: seq.id,
+                    seed: seq.seed,
+                    sourceName: seq.sourceName,
                     midiNotes: midiNotes,
                     wasCorrectFirstTry: seq.wasCorrect,
                     createdAt: Date(timeIntervalSince1970: seq.createdAt)
@@ -445,7 +455,7 @@ final class StatsRepository {
         }
     }
 
-    private func filterBindings(filter: StatsFilter) -> (clause: String, bindings: [Binding]) {
+    func filterBindings(filter: StatsFilter) -> (clause: String, bindings: [Binding]) {
         switch filter {
         case .allKeys:
             return ("", [])
@@ -454,12 +464,12 @@ final class StatsRepository {
         }
     }
 
-    private enum Binding {
+    enum Binding {
         case int(Int32)
         case text(String)
     }
 
-    private func bind(_ bindings: [Binding], to statement: OpaquePointer?) {
+    func bind(_ bindings: [Binding], to statement: OpaquePointer?) {
         for (index, binding) in bindings.enumerated() {
             let idx = Int32(index + 1)
             switch binding {
