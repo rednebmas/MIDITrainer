@@ -49,6 +49,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var keysAreHeld: Bool = false
     @Published private(set) var currentAttemptNumber: Int = 1
     @Published private(set) var activeMistakeTotalFailures: Int?
+    @Published private(set) var activeMistakeCurrentGap: Int?
 
     var isMidiConnected: Bool {
         if useOnScreenKeyboard { return true }
@@ -245,7 +246,9 @@ final class PracticeModel: ObservableObject {
                 SchedulerDebugEntry(mistake: mistake, isActive: mistake.id == activeId)
             }
             self?.schedulerDebugEntries = entries
-            self?.activeMistakeTotalFailures = queue.first { $0.id == activeId }?.totalFailures
+            let activeMistake = queue.first { $0.id == activeId }
+            self?.activeMistakeTotalFailures = activeMistake?.totalFailures
+            self?.activeMistakeCurrentGap = activeMistake?.currentClearanceDistance
         }
         .store(in: &cancellables)
     }
@@ -342,6 +345,10 @@ final class PracticeModel: ObservableObject {
 
     func skip() {
         playQuestion()
+    }
+
+    func previewHistoryEntry(seed: UInt64) {
+        engine.previewSequence(settings: settings, seed: seed)
     }
 
     private func autoSelectLastOutputIfNeeded(outputs: [MIDIEndpoint]) {

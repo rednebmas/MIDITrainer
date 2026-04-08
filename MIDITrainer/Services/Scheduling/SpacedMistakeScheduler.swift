@@ -8,7 +8,7 @@ import Foundation
 /// - After the required number of fresh questions, the mistake is re-asked.
 /// - If answered correctly on re-ask and current > min, it's removed from the queue.
 /// - If answered correctly but current <= min, current increases by clearance for another round.
-/// - If answered incorrectly on re-ask, both min and current increase by clearance.
+/// - If answered incorrectly on re-ask, min increases by clearance and current resets to clearance.
 ///
 /// Two distances are tracked:
 /// - minimumClearanceDistance: the eventual spacing needed to clear the item (increases by clearance on each failed re-ask).
@@ -38,8 +38,9 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                     adjusted.minimumClearanceDistance = clearance
                     needsUpdate = true
                 }
-                if adjusted.currentClearanceDistance < adjusted.minimumClearanceDistance {
-                    adjusted.currentClearanceDistance = adjusted.minimumClearanceDistance
+                let clampedCurrent = max(clearance, min(adjusted.currentClearanceDistance, adjusted.minimumClearanceDistance))
+                if adjusted.currentClearanceDistance != clampedCurrent {
+                    adjusted.currentClearanceDistance = clampedCurrent
                     needsUpdate = true
                 }
 
@@ -113,10 +114,10 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         guard let index = queue.firstIndex(where: { $0.id == mistakeId }) else { return }
 
         if hadErrors {
-            // Failed the re-ask: bump both minimum and current clearance so spacing grows
+            // Failed the re-ask: bump minimum (harder to clear) but reset current to base (re-ask soon)
             var mistake = queue[index]
             mistake.minimumClearanceDistance += clearance
-            mistake.currentClearanceDistance += clearance
+            mistake.currentClearanceDistance = clearance
             mistake.questionsSinceQueued = 0
             queue[index] = mistake
             

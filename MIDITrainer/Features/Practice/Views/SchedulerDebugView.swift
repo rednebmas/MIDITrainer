@@ -329,7 +329,7 @@ private struct HistoryDebugView: View {
                 ForEach(model.sequenceHistory) { entry in
                     HistoryEntryRow(
                         entry: entry,
-                        keyRoot: model.settings.key.root,
+                        model: model,
                         queueEntry: entry.seed.flatMap { queueLookup[$0] }
                     )
                 }
@@ -345,7 +345,7 @@ private struct HistoryDebugView: View {
 
 private struct HistoryEntryRow: View {
     let entry: SequenceHistoryEntry
-    let keyRoot: NoteName
+    @ObservedObject var model: PracticeModel
     let queueEntry: SchedulerDebugEntry?
 
     private var shortSeed: String {
@@ -399,6 +399,17 @@ private struct HistoryEntryRow: View {
 
             Spacer()
 
+            if entry.seed != nil {
+                Button {
+                    model.previewHistoryEntry(seed: entry.seed!)
+                } label: {
+                    Image(systemName: "play.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+            }
+
             Image(systemName: entry.wasCorrectFirstTry ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.caption)
                 .foregroundStyle(entry.wasCorrectFirstTry ? .green : .red)
@@ -406,14 +417,15 @@ private struct HistoryEntryRow: View {
     }
 
     private func reaskDescription(for queueEntry: SchedulerDebugEntry) -> String {
+        let fails = "\(queueEntry.mistake.totalFailures)x failed"
         if queueEntry.isActive {
-            return "Retrying now"
+            return "\(fails) • retrying"
         }
         let remaining = queueEntry.remainingUntilDue
         if remaining <= 0 {
-            return "Re-ask ready"
+            return "\(fails) • ready"
         }
-        return "Re-ask in \(remaining)"
+        return "\(fails) • in \(remaining)"
     }
 
     private func midiNoteToName(_ midi: UInt8) -> String {

@@ -409,16 +409,19 @@ final class PracticeEngine: ObservableObject {
         guard let currentSequenceIDs, let activeSession else { return }
         let melodyNoteId = noteIndex < currentSequenceIDs.noteIds.count ? currentSequenceIDs.noteIds[noteIndex] : nil
 
-        DispatchQueue.global(qos: .utility).async { [attemptRepository] in
-            try? attemptRepository.insertAttempt(
-                metadata: descriptor,
-                sessionId: activeSession.id,
-                sequenceId: currentSequenceIDs.sequenceId,
-                melodyNoteId: melodyNoteId,
-                key: sequence.key,
-                scaleType: sequence.scaleType
-            )
-        }
+        try? attemptRepository.insertAttempt(
+            metadata: descriptor,
+            sessionId: activeSession.id,
+            sequenceId: currentSequenceIDs.sequenceId,
+            melodyNoteId: melodyNoteId,
+            key: sequence.key,
+            scaleType: sequence.scaleType
+        )
+    }
+
+    func previewSequence(settings: PracticeSettingsSnapshot, seed: UInt64) {
+        let sequence = sequenceGenerator.generate(settings: settings, seed: seed, intervalErrorRates: nil)
+        playbackScheduler.play(sequence: sequence)
     }
 
     private func ensureSession(for settings: PracticeSettingsSnapshot) throws -> (id: Int64, settingsSnapshotId: Int64, settings: PracticeSettingsSnapshot) {
