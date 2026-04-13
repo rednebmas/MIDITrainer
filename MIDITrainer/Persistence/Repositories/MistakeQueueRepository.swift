@@ -13,8 +13,8 @@ final class MistakeQueueRepository {
     func insert(seed: UInt64, settings: PracticeSettingsSnapshot, sourceName: String? = nil, clearance: Int = 3, now: Date = Date()) throws -> QueuedMistake {
         try db.readWrite { handle in
             let sql = """
-            INSERT INTO mistake_queue (seed, settingsJson, sourceName, clearanceDistance, currentClearanceDistance, questionsSinceQueued, queuedAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO mistake_queue (seed, settingsJson, sourceName, clearanceDistance, currentClearanceDistance, totalFailures, questionsSinceQueued, queuedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
             """
             var statement: OpaquePointer?
             guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -35,8 +35,9 @@ final class MistakeQueueRepository {
             }
             sqlite3_bind_int(statement, 4, Int32(clearance))
             sqlite3_bind_int(statement, 5, Int32(clearance))
-            sqlite3_bind_int(statement, 6, 0)
-            sqlite3_bind_double(statement, 7, now.timeIntervalSince1970)
+            sqlite3_bind_int(statement, 6, 1)
+            sqlite3_bind_int(statement, 7, 0)
+            sqlite3_bind_double(statement, 8, now.timeIntervalSince1970)
 
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw DatabaseError.statementFailed(message: "Failed to insert mistake_queue")
@@ -50,6 +51,7 @@ final class MistakeQueueRepository {
                 sourceName: sourceName,
                 minimumClearanceDistance: clearance,
                 currentClearanceDistance: clearance,
+                totalFailures: 1,
                 questionsSinceQueued: 0,
                 queuedAt: now
             )
@@ -60,7 +62,7 @@ final class MistakeQueueRepository {
     func loadAll() throws -> [QueuedMistake] {
         try db.readWrite { handle in
             let sql = """
-            SELECT id, seed, settingsJson, sourceName, clearanceDistance, currentClearanceDistance, questionsSinceQueued, queuedAt
+            SELECT id, seed, settingsJson, sourceName, clearanceDistance, currentClearanceDistance, totalFailures, questionsSinceQueued, queuedAt
             FROM mistake_queue
             ORDER BY queuedAt ASC;
             """
@@ -92,8 +94,11 @@ final class MistakeQueueRepository {
 
                 let clearanceDistance = Int(sqlite3_column_int(statement, 4))
                 let currentClearanceDistance = Int(sqlite3_column_int(statement, 5))
-                let questionsSinceQueued = Int(sqlite3_column_int(statement, 6))
-                let queuedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 7))
+                let totalFailures: Int? = sqlite3_column_type(statement, 6) == SQLITE_NULL
+                    ? nil
+                    : Int(sqlite3_column_int(statement, 6))
+                let questionsSinceQueued = Int(sqlite3_column_int(statement, 7))
+                let queuedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 8))
 
                 let mistake = QueuedMistake(
                     id: id,
@@ -102,6 +107,7 @@ final class MistakeQueueRepository {
                     sourceName: sourceName,
                     minimumClearanceDistance: clearanceDistance,
                     currentClearanceDistance: currentClearanceDistance,
+                    totalFailures: totalFailures,
                     questionsSinceQueued: questionsSinceQueued,
                     queuedAt: queuedAt
                 )
@@ -113,11 +119,17 @@ final class MistakeQueueRepository {
     }
     
     /// Updates a mistake's distances and counter after a re-ask.
-    func update(id: Int64, minimumClearanceDistance: Int, currentClearanceDistance: Int, questionsSinceQueued: Int) throws {
+    func update(
+        id: Int64,
+        minimumClearanceDistance: Int,
+        currentClearanceDistance: Int,
+        totalFailures: Int?,
+        questionsSinceQueued: Int
+    ) throws {
         try db.readWrite { handle in
             let sql = """
             UPDATE mistake_queue
-            SET clearanceDistance = ?, currentClearanceDistance = ?, questionsSinceQueued = ?
+            SET clearanceDistance = ?, currentClearanceDistance = ?, totalFailures = ?, questionsSinceQueued = ?
             WHERE id = ?;
             """
             var statement: OpaquePointer?
@@ -128,8 +140,13 @@ final class MistakeQueueRepository {
             
             sqlite3_bind_int(statement, 1, Int32(minimumClearanceDistance))
             sqlite3_bind_int(statement, 2, Int32(currentClearanceDistance))
-            sqlite3_bind_int(statement, 3, Int32(questionsSinceQueued))
-            sqlite3_bind_int64(statement, 4, id)
+            if let totalFailures {
+                sqlite3_bind_int(statement, 3, Int32(totalFailures))
+            } else {
+                sqlite3_bind_null(statement, 3)
+            }
+            sqlite3_bind_int(statement, 4, Int32(questionsSinceQueued))
+            sqlite3_bind_int64(statement, 5, id)
             
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw DatabaseError.statementFailed(message: "Failed to update mistake_queue")

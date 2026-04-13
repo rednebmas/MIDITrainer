@@ -126,45 +126,132 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
                        "current should still be base clearance, never grows")
     }
 
+    func testFailureCountTracksNonDefaultClearance() {
+        let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { 5 })
+
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
+        let mistakeId = scheduler.queueSnapshot[0].id
+        XCTAssertEqual(scheduler.queueSnapshot[0].totalFailures, Optional(1))
+
+        advanceFreshQuestions(scheduler: scheduler, count: 5)
+        guard case .reask(_, _, let rid) = scheduler.nextQuestion(currentSettings: settings) else {
+            return XCTFail("Expected reask")
+        }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid, sourceName: nil)
+
+        let updated = scheduler.queueSnapshot.first { $0.id == mistakeId }!
+        XCTAssertEqual(updated.minimumClearanceDistance, 10)
+        XCTAssertEqual(updated.currentClearanceDistance, 5)
+        XCTAssertEqual(updated.totalFailures, Optional(2))
+    }
+
+    func testFailureCountDoesNotDependOnSpacingMath() {
+        var clearance = 3
+        let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { clearance })
+
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
+        let mistakeId = scheduler.queueSnapshot[0].id
+        XCTAssertEqual(scheduler.queueSnapshot[0].totalFailures, Optional(1))
+
+        advanceFreshQuestions(scheduler: scheduler, count: 3)
+        guard case .reask(_, _, let rid1) = scheduler.nextQuestion(currentSettings: settings) else {
+            return XCTFail("Expected reask")
+        }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid1, sourceName: nil)
+
+        clearance = 5
+
+        advanceFreshQuestions(scheduler: scheduler, count: 3)
+        guard case .reask(_, _, let rid2) = scheduler.nextQuestion(currentSettings: settings) else {
+            return XCTFail("Expected reask")
+        }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid2, sourceName: nil)
+
+        advanceFreshQuestions(scheduler: scheduler, count: 5)
+        guard case .reask(_, _, let rid3) = scheduler.nextQuestion(currentSettings: settings) else {
+            return XCTFail("Expected reask")
+        }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid3, sourceName: nil)
+
+        let updated = scheduler.queueSnapshot.first { $0.id == mistakeId }!
+        XCTAssertEqual(updated.minimumClearanceDistance, 16)
+        XCTAssertEqual(updated.currentClearanceDistance, 5)
+        XCTAssertEqual(updated.totalFailures, Optional(4), "Failure count should track actual failures, not be derived from spacing values")
+    }
+
     // MARK: - Success increases currentClearanceDistance
 
-    func testSuccessfulReaskBumpsCurrentClearance() {
+    func testSuccessfulReaskClearsWhenCurrentEqualsMin() {
         let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { 3 })
 
         scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
         let mistakeId = scheduler.queueSnapshot[0].id
 
-        // Pass the re-ask (current == min == 3)
+        // Pass the re-ask (current == min == 3) → cleared immediately
         advanceFreshQuestions(scheduler: scheduler, count: 3)
         let reask = scheduler.nextQuestion(currentSettings: settings)
         guard case .reask(_, _, let rid) = reask else { return XCTFail("Expected reask") }
         scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid, sourceName: nil)
 
-        XCTAssertEqual(scheduler.pendingCount, 1, "Should still be in queue (current was == min)")
-        let entry = scheduler.queueSnapshot.first { $0.id == mistakeId }!
-        XCTAssertEqual(entry.minimumClearanceDistance, 3, "min unchanged on success")
-        XCTAssertEqual(entry.currentClearanceDistance, 6, "current bumped by clearance: 3 + 3 = 6")
+        XCTAssertEqual(scheduler.pendingCount, 0, "Should be cleared when current == min")
+        XCTAssertNil(scheduler.queueSnapshot.first { $0.id == mistakeId })
     }
 
-    func testSuccessfulReaskClearsWhenCurrentExceedsMin() {
+    func testSuccessfulReaskRequiresTwoPassesAfterFailure() {
         let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { 3 })
 
         scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
         let mistakeId = scheduler.queueSnapshot[0].id
 
-        // First pass: bumps current from 3 to 6
+        // Fail re-ask: min=6, current=3
         advanceFreshQuestions(scheduler: scheduler, count: 3)
-        let reask1 = scheduler.nextQuestion(currentSettings: settings)
-        guard case .reask(_, _, let rid1) = reask1 else { return XCTFail("Expected reask") }
-        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid1, sourceName: nil)
+        guard case .reask(_, _, let rid1) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid1, sourceName: nil)
 
-        // Second pass: current(6) > min(3) → should be removed
-        advanceFreshQuestions(scheduler: scheduler, count: 6)
-        let reask2 = scheduler.nextQuestion(currentSettings: settings)
-        guard case .reask(_, _, let rid2) = reask2 else { return XCTFail("Expected reask") }
+        // Pass 1: current=3, 3 >= 6? NO → bump to 6
+        advanceFreshQuestions(scheduler: scheduler, count: 3)
+        guard case .reask(_, _, let rid2) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
         scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid2, sourceName: nil)
 
-        XCTAssertEqual(scheduler.pendingCount, 0, "Mistake should be cleared from queue")
+        XCTAssertEqual(scheduler.pendingCount, 1, "Not cleared yet after first pass")
+        let after = scheduler.queueSnapshot.first { $0.id == mistakeId }!
+        XCTAssertEqual(after.currentClearanceDistance, 6, "current bumped to 6")
+
+        // Pass 2: current=6, 6 >= 6? YES → cleared
+        advanceFreshQuestions(scheduler: scheduler, count: 6)
+        guard case .reask(_, _, let rid3) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid3, sourceName: nil)
+
+        XCTAssertEqual(scheduler.pendingCount, 0, "Cleared after second pass")
+        XCTAssertNil(scheduler.queueSnapshot.first { $0.id == mistakeId })
+    }
+
+    func testClearsWhenCurrentReachesMin() {
+        let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { 3 })
+
+        // Fresh question fails → min=3, current=3
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
+        let mistakeId = scheduler.queueSnapshot[0].id
+
+        // Re-ask fails → min=6, current=3
+        advanceFreshQuestions(scheduler: scheduler, count: 3)
+        guard case .reask(_, _, let rid1) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid1, sourceName: nil)
+
+        // Re-ask succeeds → check: 3 >= 6? NO → current bumps to 6. Still in queue.
+        advanceFreshQuestions(scheduler: scheduler, count: 3)
+        guard case .reask(_, _, let rid2) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid2, sourceName: nil)
+        XCTAssertEqual(scheduler.pendingCount, 1, "Not cleared yet — current was below min")
+
+        // Re-ask succeeds again → check: current(6) >= min(6)? YES → cleared!
+        // Bug: with '>', 6 > 6 is false → bumped to 9, creating an unnecessary extra pass.
+        advanceFreshQuestions(scheduler: scheduler, count: 6)
+        guard case .reask(_, _, let rid3) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid3, sourceName: nil)
+
+        XCTAssertEqual(scheduler.pendingCount, 0,
+                       "Mistake should clear when current == min, not require an extra pass")
         XCTAssertNil(scheduler.queueSnapshot.first { $0.id == mistakeId })
     }
 
@@ -176,28 +263,31 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
         scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
         let mistakeId = scheduler.queueSnapshot[0].id
 
-        // Fail first re-ask: min=6, current=3
+        // Fail re-ask twice: min=9, current=3
         advanceFreshQuestions(scheduler: scheduler, count: 3)
         guard case .reask(_, _, let rid1) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
         scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid1, sourceName: nil)
-
-        // Pass re-ask: current bumps from 3 to 6
         advanceFreshQuestions(scheduler: scheduler, count: 3)
         guard case .reask(_, _, let rid2) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
-        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid2, sourceName: nil)
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid2, sourceName: nil)
+
+        // Pass re-ask: current bumps from 3 to 6 (still < min=9, not cleared)
+        advanceFreshQuestions(scheduler: scheduler, count: 3)
+        guard case .reask(_, _, let rid3) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid3, sourceName: nil)
 
         let afterPass = scheduler.queueSnapshot.first { $0.id == mistakeId }!
         XCTAssertEqual(afterPass.currentClearanceDistance, 6, "current bumped on success")
-        XCTAssertEqual(afterPass.minimumClearanceDistance, 6, "min unchanged on success")
+        XCTAssertEqual(afterPass.minimumClearanceDistance, 9, "min unchanged on success")
 
-        // Fail next re-ask: current should reset back to 3, min bumps to 9
+        // Fail next re-ask: current should reset back to 3, min bumps to 12
         advanceFreshQuestions(scheduler: scheduler, count: 6)
-        guard case .reask(_, _, let rid3) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
-        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid3, sourceName: nil)
+        guard case .reask(_, _, let rid4) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid4, sourceName: nil)
 
         let afterFail = scheduler.queueSnapshot.first { $0.id == mistakeId }!
         XCTAssertEqual(afterFail.currentClearanceDistance, 3, "current resets to base on failure")
-        XCTAssertEqual(afterFail.minimumClearanceDistance, 9, "min increases on failure: 6 + 3 = 9")
+        XCTAssertEqual(afterFail.minimumClearanceDistance, 12, "min increases on failure: 9 + 3 = 12")
     }
 
     // MARK: - Load queue preserves failure reset
@@ -223,6 +313,7 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
         XCTAssertEqual(after.currentClearanceDistance, 3,
                        "loadQueue must NOT boost current back to min — failure reset must survive restart")
         XCTAssertEqual(after.minimumClearanceDistance, 6, "min unchanged on reload")
+        XCTAssertEqual(after.totalFailures, Optional(2), "Persisted failure count should survive reload")
     }
 
     func testLoadQueueCapsLegacyCurrentAboveMin() {
@@ -230,7 +321,13 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
         let mistake = try! repo.insert(seed: 999, settings: settings, sourceName: nil, clearance: 3)
 
         // Manually update to simulate legacy state: min=50, current=70
-        try! repo.update(id: mistake.id, minimumClearanceDistance: 50, currentClearanceDistance: 70, questionsSinceQueued: 0)
+        try! repo.update(
+            id: mistake.id,
+            minimumClearanceDistance: 50,
+            currentClearanceDistance: 70,
+            totalFailures: nil,
+            questionsSinceQueued: 0
+        )
 
         let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { 3 })
         let loaded = scheduler.queueSnapshot.first { $0.id == mistake.id }!
@@ -238,6 +335,7 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
         XCTAssertEqual(loaded.currentClearanceDistance, 50,
                        "loadQueue should cap current to min for legacy entries where current > min")
         XCTAssertEqual(loaded.minimumClearanceDistance, 50, "min unchanged")
+        XCTAssertNil(loaded.totalFailures, "Legacy rows without a persisted failure count should stay unknown")
     }
 
     // MARK: - Helpers

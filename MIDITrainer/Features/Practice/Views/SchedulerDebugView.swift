@@ -210,7 +210,7 @@ private struct SpacedMistakeRow: View {
     }
 
     private var statusDescription: String {
-        if entry.isActive { return "Retry #\(mistake.totalFailures)" }
+        if entry.isActive { return retryLabel }
         if mistake.isDue { return "Ready" }
         return "Waiting"
     }
@@ -229,8 +229,18 @@ private struct SpacedMistakeRow: View {
     private var progressDescription: String {
         let remaining = mistake.currentClearanceDistance - mistake.questionsSinceQueued
         let gap = mistake.currentClearanceDistance
-        let failText = "Failed \(mistake.totalFailures)x"
+        let failText = failureSummary
         return remaining > 0 ? "\(failText) • \(remaining) to go • \(gap) gap" : "\(failText) • Ready"
+    }
+
+    private var retryLabel: String {
+        guard let totalFailures = mistake.totalFailures else { return "Retry" }
+        return "Retry #\(totalFailures)"
+    }
+
+    private var failureSummary: String {
+        guard let totalFailures = mistake.totalFailures else { return "Failed previously" }
+        return "Failed \(totalFailures)x"
     }
 }
 
@@ -417,7 +427,12 @@ private struct HistoryEntryRow: View {
     }
 
     private func reaskDescription(for queueEntry: SchedulerDebugEntry) -> String {
-        let fails = "\(queueEntry.mistake.totalFailures)x failed"
+        let fails: String
+        if let totalFailures = queueEntry.mistake.totalFailures {
+            fails = "\(totalFailures)x failed"
+        } else {
+            fails = "failed before"
+        }
         if queueEntry.isActive {
             return "\(fails) • retrying"
         }

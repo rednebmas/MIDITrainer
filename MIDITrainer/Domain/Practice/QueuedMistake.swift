@@ -4,9 +4,6 @@ import Foundation
 struct QueuedMistake: Equatable, Codable {
     /// Shared initial spacing for new mistakes (kept in one place to avoid drift between runtime and persistence).
     static let initialClearanceDistance = 3
-
-    /// How much to increase the minimum clearance distance when failing a re-ask.
-    static let clearanceIncrement = 3
     
     /// Unique identifier for this queued entry (database row ID).
     let id: Int64
@@ -25,6 +22,10 @@ struct QueuedMistake: Equatable, Codable {
     
     /// The number of fresh questions required before the next re-ask.
     var currentClearanceDistance: Int
+
+    /// Exact number of failures for this queued mistake when known.
+    /// Legacy rows created before this was persisted may not have a value.
+    var totalFailures: Int?
     
     /// How many fresh questions have been answered since this was queued or last attempted.
     var questionsSinceQueued: Int
@@ -34,11 +35,6 @@ struct QueuedMistake: Equatable, Codable {
         questionsSinceQueued >= currentClearanceDistance
     }
 
-    /// Total times this card has been failed (1 for initial failure + subsequent re-ask failures).
-    var totalFailures: Int {
-        1 + (minimumClearanceDistance - Self.initialClearanceDistance) / Self.clearanceIncrement
-    }
-    
     /// The timestamp when this mistake was first queued.
     let queuedAt: Date
     
@@ -50,6 +46,7 @@ struct QueuedMistake: Equatable, Codable {
         self.sourceName = sourceName
         self.minimumClearanceDistance = Self.initialClearanceDistance
         self.currentClearanceDistance = Self.initialClearanceDistance
+        self.totalFailures = 1
         self.questionsSinceQueued = 0
         self.queuedAt = queuedAt
     }
@@ -62,6 +59,7 @@ struct QueuedMistake: Equatable, Codable {
         sourceName: String?,
         minimumClearanceDistance: Int,
         currentClearanceDistance: Int,
+        totalFailures: Int?,
         questionsSinceQueued: Int,
         queuedAt: Date
     ) {
@@ -71,6 +69,7 @@ struct QueuedMistake: Equatable, Codable {
         self.sourceName = sourceName
         self.minimumClearanceDistance = minimumClearanceDistance
         self.currentClearanceDistance = currentClearanceDistance
+        self.totalFailures = totalFailures.map { max(1, $0) }
         self.questionsSinceQueued = questionsSinceQueued
         self.queuedAt = queuedAt
     }

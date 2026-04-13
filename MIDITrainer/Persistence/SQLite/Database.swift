@@ -152,6 +152,9 @@ extension Database {
             ]),
             Migration(version: 6, statements: [
                 "ALTER TABLE melody_sequence ADD COLUMN sourceName TEXT;"
+            ]),
+            Migration(version: 7, statements: [
+                "ALTER TABLE mistake_queue ADD COLUMN totalFailures INTEGER;"
             ])
         ]
     }()

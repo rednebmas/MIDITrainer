@@ -28,6 +28,54 @@ struct PracticeView: View {
     }
 
     var body: some View {
+        ZStack {
+            DynamicBackgroundView(model: model)
+                .ignoresSafeArea()
+
+            mainContent
+
+            StreakMilestoneBannerView(model: model)
+            DailyGoalCelebrationView(model: model)
+        }
+        .sheet(isPresented: $showingMIDISettings) {
+            MIDISettingsSheet(
+                model: model,
+                onBluetoothTap: {
+                    showingMIDISettings = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showingBluetoothPicker = true
+                    }
+                }
+            )
+            .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingBluetoothPicker, onDismiss: {
+            print("[MIDI] BluetoothPicker onDismiss called - refreshing endpoints")
+            model.refreshEndpoints()
+        }) {
+            BluetoothMIDIPicker()
+        }
+        .alert("MIDI output not available", isPresented: $showingMissingOutput) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please select a MIDI destination before playing.")
+        }
+        .sheet(isPresented: $showingAccuracyHistory) {
+            AccuracyHistorySheet(
+                entries: model.sequenceHistory,
+                keyRoot: model.settings.key.root
+            )
+            .presentationDetents([.medium, .large])
+        }
+        #if DEBUG
+        .sheet(isPresented: $showingDebug) {
+            SchedulerDebugSheet(model: model)
+                .presentationDetents([.medium, .large])
+        }
+        #endif
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             // Top Stats Bar
             GameStatsBarView(
@@ -84,42 +132,6 @@ struct PracticeView: View {
             .padding(.bottom, 8)
             #endif
         }
-        .sheet(isPresented: $showingMIDISettings) {
-            MIDISettingsSheet(
-                model: model,
-                onBluetoothTap: {
-                    showingMIDISettings = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showingBluetoothPicker = true
-                    }
-                }
-            )
-            .presentationDetents([.large])
-        }
-        .sheet(isPresented: $showingBluetoothPicker, onDismiss: {
-            print("[MIDI] BluetoothPicker onDismiss called - refreshing endpoints")
-            model.refreshEndpoints()
-        }) {
-            BluetoothMIDIPicker()
-        }
-        .alert("MIDI output not available", isPresented: $showingMissingOutput) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Please select a MIDI destination before playing.")
-        }
-        .sheet(isPresented: $showingAccuracyHistory) {
-            AccuracyHistorySheet(
-                entries: model.sequenceHistory,
-                keyRoot: model.settings.key.root
-            )
-            .presentationDetents([.medium, .large])
-        }
-        #if DEBUG
-        .sheet(isPresented: $showingDebug) {
-            SchedulerDebugSheet(model: model)
-                .presentationDetents([.medium, .large])
-        }
-        #endif
     }
 
     private func handleAction() {
