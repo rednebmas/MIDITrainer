@@ -227,10 +227,13 @@ private struct SpacedMistakeRow: View {
     }
 
     private var progressDescription: String {
-        let remaining = mistake.currentClearanceDistance - mistake.questionsSinceQueued
+        let remaining = max(0, mistake.currentClearanceDistance - mistake.questionsSinceQueued)
         let gap = mistake.currentClearanceDistance
         let failText = failureSummary
-        return remaining > 0 ? "\(failText) • \(remaining) to go • \(gap) gap" : "\(failText) • Ready"
+        if remaining > 0 {
+            return "\(failText) • \(remaining) to go • \(gap) gap"
+        }
+        return "\(failText) • \(gap) gap • Ready"
     }
 
     private var retryLabel: String {

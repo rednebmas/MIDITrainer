@@ -106,16 +106,10 @@ struct NoteOrbsContainerView: View {
                             Text("Replay #\(model.currentAttemptNumber)")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.orange)
-                        } else if let failures = model.activeMistakeTotalFailures {
-                            if let gap = model.activeMistakeCurrentGap {
-                                Text("Retry #\(failures) (gap \(gap))")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.yellow)
-                            } else {
-                                Text("Retry #\(failures)")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.yellow)
-                            }
+                        } else if let gap = model.activeMistakeCurrentGap {
+                            Text("Retry\(model.activeMistakeTotalFailures.map { " #\($0)" } ?? "") (gap \(gap))")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.yellow)
                         } else {
                             Text("NEW")
                                 .font(.caption2.weight(.semibold))

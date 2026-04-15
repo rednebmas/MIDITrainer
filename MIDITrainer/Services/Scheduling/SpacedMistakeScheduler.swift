@@ -43,7 +43,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                     adjusted.currentClearanceDistance = clampedCurrent
                     needsUpdate = true
                 }
-                if let totalFailures = adjusted.totalFailures, totalFailures < 1 {
+                if adjusted.totalFailures == nil || adjusted.totalFailures! < 1 {
                     adjusted.totalFailures = 1
                     needsUpdate = true
                 }
