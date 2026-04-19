@@ -107,6 +107,10 @@ final class SettingsStore: ObservableObject {
     @Published var spacedMistakeClearance: Int {
         didSet { defaults.set(spacedMistakeClearance, forKey: spacedMistakeClearanceKey) }
     }
+    /// Minimum successful passes required to clear a mistake (floor on clearance multiplier)
+    @Published var spacedMistakeMinPasses: Int {
+        didSet { defaults.set(spacedMistakeMinPasses, forKey: spacedMistakeMinPassesKey) }
+    }
 
     private var deviceSettingsCache: [String: DeviceSettings] = [:]
 
@@ -134,6 +138,7 @@ final class SettingsStore: ObservableObject {
     private let octaveMattersKey = "com.sambender.miditrainer.octaveMatters"
     private let showNoteOrbsKey = "com.sambender.miditrainer.showNoteOrbs"
     private let spacedMistakeClearanceKey = "com.sambender.miditrainer.spacedMistakeClearance"
+    private let spacedMistakeMinPassesKey = "com.sambender.miditrainer.spacedMistakeMinPasses"
     private let deviceSettingsKey = "com.sambender.miditrainer.deviceSettings"
 
     private var todayDateString: String {
@@ -183,6 +188,7 @@ final class SettingsStore: ObservableObject {
         self.octaveMatters = defaults.object(forKey: octaveMattersKey) as? Bool ?? true
         self.showNoteOrbs = defaults.object(forKey: showNoteOrbsKey) as? Bool ?? true
         self.spacedMistakeClearance = defaults.object(forKey: spacedMistakeClearanceKey) as? Int ?? 3
+        self.spacedMistakeMinPasses = defaults.object(forKey: spacedMistakeMinPassesKey) as? Int ?? 3
 
         if let data = defaults.data(forKey: deviceSettingsKey),
            let decoded = try? JSONDecoder().decode([String: DeviceSettings].self, from: data) {

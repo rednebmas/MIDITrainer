@@ -21,11 +21,16 @@ final class SchedulingCoordinator: ObservableObject {
         statsRepository: StatsRepository,
         weaknessMatchExactSettings: @escaping () -> Bool = { false },
         spacedMistakeClearance: @escaping () -> Int = { 3 },
+        spacedMistakeMinPasses: @escaping () -> Int = { 3 },
         onModeChange: @escaping (SchedulerMode) -> Void
     ) {
         self.mode = initialMode
         self.onModeChange = onModeChange
-        self.spacedScheduler = SpacedMistakeScheduler(repository: repository, clearanceProvider: spacedMistakeClearance)
+        self.spacedScheduler = SpacedMistakeScheduler(
+            repository: repository,
+            clearanceProvider: spacedMistakeClearance,
+            minPassesProvider: spacedMistakeMinPasses
+        )
         self.weaknessScheduler = WeaknessFocusedScheduler(
             spacedScheduler: spacedScheduler,
             statsRepository: statsRepository,
@@ -88,6 +93,14 @@ final class SchedulingCoordinator: ObservableObject {
         updatePublishedState()
     }
     
+    /// Defers the currently active re-ask: resets its wait counter so it's no longer due.
+    func deferCurrentMistake() {
+        guard let id = activeMistakeId else { return }
+        spacedScheduler.deferMistake(id: id)
+        activeMistakeId = nil
+        updatePublishedState()
+    }
+
     /// Clears all pending mistakes from the queue.
     func clearQueue() {
         spacedScheduler.clearQueue()

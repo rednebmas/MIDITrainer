@@ -83,7 +83,7 @@ struct SchedulerDebugView: View {
                 Text(model.schedulerMode.displayName)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("Clearance: \(model.spacedMistakeClearance)")
+                Text("Clearance: \(model.spacedMistakeClearance) • Min passes: \(model.spacedMistakeMinPasses)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -397,15 +397,13 @@ private struct HistoryEntryRow: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
 
-                    if !entry.wasCorrectFirstTry {
-                        if let queueEntry {
-                            Text("•")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(reaskDescription(for: queueEntry))
-                                .font(.caption2)
-                                .foregroundStyle(.orange)
-                        }
+                    if let queueEntry {
+                        Text("•")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(reaskDescription(for: queueEntry))
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
                     }
                 }
             }

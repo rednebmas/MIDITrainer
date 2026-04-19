@@ -42,6 +42,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var schedulerMode: SchedulerMode = .spacedMistakes
     @Published private(set) var weaknessDebugEntries: [WeaknessEntry] = []
     @Published private(set) var spacedMistakeClearance: Int = 3
+    @Published private(set) var spacedMistakeMinPasses: Int = 3
     @Published private(set) var showChordSymbols: Bool = true
     @Published private(set) var showNoteOrbs: Bool = true
     @Published private(set) var isScanningMIDI: Bool = true
@@ -50,6 +51,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var currentAttemptNumber: Int = 1
     @Published private(set) var activeMistakeTotalFailures: Int?
     @Published private(set) var activeMistakeCurrentGap: Int?
+    @Published private(set) var isShowingAnswer: Bool = false
 
     var isMidiConnected: Bool {
         if useOnScreenKeyboard { return true }
@@ -110,6 +112,7 @@ final class PracticeModel: ObservableObject {
             statsRepository: self.statsRepository,
             weaknessMatchExactSettings: { settingsStore.weaknessMatchExactSettings },
             spacedMistakeClearance: { settingsStore.spacedMistakeClearance },
+            spacedMistakeMinPasses: { settingsStore.spacedMistakeMinPasses },
             onModeChange: { newMode in
                 settingsStore.schedulerMode = newMode
             }
@@ -217,6 +220,11 @@ final class PracticeModel: ObservableObject {
         settingsStore.$spacedMistakeClearance
             .receive(on: DispatchQueue.main)
             .assign(to: \.spacedMistakeClearance, on: self)
+            .store(in: &cancellables)
+
+        settingsStore.$spacedMistakeMinPasses
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.spacedMistakeMinPasses, on: self)
             .store(in: &cancellables)
     }
 
@@ -344,7 +352,12 @@ final class PracticeModel: ObservableObject {
     }
 
     func skip() {
+        schedulingCoordinator.deferCurrentMistake()
         playQuestion()
+    }
+
+    func showAnswer() {
+        engine.enterStudyMode()
     }
 
     func previewHistoryEntry(seed: UInt64) {
@@ -522,6 +535,11 @@ final class PracticeModel: ObservableObject {
         engine.$currentAttemptNumber
             .receive(on: DispatchQueue.main)
             .assign(to: \.currentAttemptNumber, on: self)
+            .store(in: &cancellables)
+
+        engine.$studyMode
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.isShowingAnswer, on: self)
             .store(in: &cancellables)
     }
 

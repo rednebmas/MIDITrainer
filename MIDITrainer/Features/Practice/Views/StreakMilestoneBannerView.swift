@@ -10,12 +10,14 @@ struct StreakMilestoneBannerView: View {
     private static let milestones: Set<Int> = [1, 3, 5, 7, 10, 15, 20, 25, 50]
 
     var body: some View {
-        ZStack {
+        VStack {
             if let milestone = visibleMilestone {
                 bannerContent(for: milestone)
                     .scaleEffect(bannerScale)
                     .opacity(bannerOpacity)
+                    .padding(.top, 110)
             }
+            Spacer()
         }
         .allowsHitTesting(false)
         .onChange(of: model.currentStreak) { oldValue, newValue in

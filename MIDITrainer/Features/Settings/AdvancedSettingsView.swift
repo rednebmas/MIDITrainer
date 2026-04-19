@@ -71,10 +71,11 @@ struct AdvancedSettingsView: View {
 
             Section {
                 Stepper("Clearance: \(settingsStore.spacedMistakeClearance)", value: $settingsStore.spacedMistakeClearance, in: 1...20)
+                Stepper("Min passes to clear: \(settingsStore.spacedMistakeMinPasses)", value: $settingsStore.spacedMistakeMinPasses, in: 1...10)
             } header: {
                 Text("Spaced Repetition")
             } footer: {
-                Text("Number of fresh questions before a mistake is re-asked. Higher values mean less frequent repetition.")
+                Text("Clearance sets how many fresh questions between re-asks. Min passes is the minimum number of successful re-asks required to clear a mistake — a card with more failures needs at least as many passes as failures.")
             }
         }
         .navigationTitle("Advanced")

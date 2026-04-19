@@ -38,6 +38,11 @@ struct NoteOrbsContainerView: View {
         return result.joined(separator: " → ")
     }
 
+    private var answerNoteNames: [String]? {
+        guard let notes = sequence?.notes else { return nil }
+        return notes.compactMap { NoteName(rawValue: Int($0.midiNoteNumber % 12))?.displayName }
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             if let sequence = sequence {
@@ -54,6 +59,14 @@ struct NoteOrbsContainerView: View {
                     }
                     .onAppear {
                         animateOrbsAppearance(count: sequence.notes.count)
+                    }
+                } else if model.isShowingAnswer, let names = answerNoteNames {
+                    HStack(spacing: 20) {
+                        ForEach(Array(names.enumerated()), id: \.offset) { _, name in
+                            Text(name)
+                                .font(.system(size: 44, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                        }
                     }
                 } else {
                     Text(statusText)

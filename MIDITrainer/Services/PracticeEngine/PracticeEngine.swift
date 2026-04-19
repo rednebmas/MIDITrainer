@@ -77,6 +77,8 @@ final class PracticeEngine: ObservableObject {
     private let maxRecentAttempts = 10
     /// Tracks the current attempt number (1 for first try, increments on each replay)
     @Published private(set) var currentAttemptNumber: Int = 1
+    /// When true, sequence completion does not auto-advance or auto-replay — user controls when to move on.
+    @Published private(set) var studyMode: Bool = false
 
     init(
         midiService: MIDIService,
@@ -126,6 +128,7 @@ final class PracticeEngine: ObservableObject {
     }
 
     func playQuestion(settings: PracticeSettingsSnapshot, seed: UInt64? = nil) {
+        studyMode = false
         // Determine what question to play via the scheduler
         let questionToPlay: NextQuestion
         if let coordinator = schedulingCoordinator {
@@ -216,12 +219,19 @@ final class PracticeEngine: ObservableObject {
 
     private func handleReplayHotkey(noteNumber: UInt8) -> Bool {
         guard let hotkeyNote = replayHotkeyNote(), noteNumber == hotkeyNote else { return false }
-        if case .idle = state {
+        if studyMode {
+            playQuestion(settings: currentSettingsProvider())
+        } else if case .idle = state {
             playQuestion(settings: currentSettingsProvider())
         } else {
             replay()
         }
         return true
+    }
+
+    func enterStudyMode() {
+        studyMode = true
+        replay()
     }
 
     private func handle(noteOn noteNumber: UInt8) {
@@ -301,6 +311,7 @@ final class PracticeEngine: ObservableObject {
         let action: () -> Void = { [weak self] in
             guard let self else { return }
             self.state = .completed(sequence: sequence, hadErrors: self.hadErrorsInSequence)
+            if self.studyMode { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
                 guard let self else { return }
                 if self.madeErrorInCurrentAttempt {
