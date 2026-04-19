@@ -2,6 +2,13 @@ build/*
 temp/*
 tmp/*
 
+# macOS
+.DS_Store
+
+# Xcode user-specific state
+xcuserdata/
+*.xcuserstate
+
 # Weimar Jazz Database (download separately - see scripts/extract_weimar_phrases.py)
 Resources/WeimarJazzDB/
 
