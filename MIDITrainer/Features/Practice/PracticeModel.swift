@@ -27,7 +27,6 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var awaitingNoteIndex: Int?
     @Published var settings: PracticeSettingsSnapshot
     @Published private(set) var errorNoteIndex: Int?
-    @Published private(set) var isReplaying: Bool = false
     @Published private(set) var firstTryAccuracy: FirstTryAccuracy?
     @Published private(set) var sequenceHistory: [SequenceHistoryEntry] = []
     @Published private(set) var currentStreak: Int = 0
@@ -52,6 +51,8 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var activeMistakeTotalFailures: Int?
     @Published private(set) var activeMistakeCurrentGap: Int?
     @Published private(set) var isShowingAnswer: Bool = false
+
+    var isReplaying: Bool { currentAttemptNumber > 1 }
 
     var isMidiConnected: Bool {
         if useOnScreenKeyboard { return true }
@@ -182,6 +183,13 @@ final class PracticeModel: ObservableObject {
         refreshWeaknessEntries()
     }
 
+    private func bindProperty<P: Publisher>(_ publisher: P, to keyPath: ReferenceWritableKeyPath<PracticeModel, P.Output>) where P.Failure == Never {
+        publisher
+            .receive(on: DispatchQueue.main)
+            .assign(to: keyPath, on: self)
+            .store(in: &cancellables)
+    }
+
     private func bindForegroundRefresh() {
         NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
             .receive(on: DispatchQueue.main)
@@ -192,57 +200,19 @@ final class PracticeModel: ObservableObject {
     }
 
     private func bindStats() {
-        settingsStore.$currentStreak
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.currentStreak, on: self)
-            .store(in: &cancellables)
-
-        settingsStore.$questionsAnsweredToday
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.questionsAnsweredToday, on: self)
-            .store(in: &cancellables)
-
-        settingsStore.$dailyGoal
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.dailyGoal, on: self)
-            .store(in: &cancellables)
-
-        settingsStore.$showChordSymbols
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.showChordSymbols, on: self)
-            .store(in: &cancellables)
-
-        settingsStore.$showNoteOrbs
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.showNoteOrbs, on: self)
-            .store(in: &cancellables)
-
-        settingsStore.$spacedMistakeClearance
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.spacedMistakeClearance, on: self)
-            .store(in: &cancellables)
-
-        settingsStore.$spacedMistakeMinPasses
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.spacedMistakeMinPasses, on: self)
-            .store(in: &cancellables)
+        bindProperty(settingsStore.$currentStreak, to: \.currentStreak)
+        bindProperty(settingsStore.$questionsAnsweredToday, to: \.questionsAnsweredToday)
+        bindProperty(settingsStore.$dailyGoal, to: \.dailyGoal)
+        bindProperty(settingsStore.$showChordSymbols, to: \.showChordSymbols)
+        bindProperty(settingsStore.$showNoteOrbs, to: \.showNoteOrbs)
+        bindProperty(settingsStore.$spacedMistakeClearance, to: \.spacedMistakeClearance)
+        bindProperty(settingsStore.$spacedMistakeMinPasses, to: \.spacedMistakeMinPasses)
     }
 
     private func bindScheduler() {
-        schedulingCoordinator.$pendingCount
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.pendingMistakeCount, on: self)
-            .store(in: &cancellables)
-
-        schedulingCoordinator.$questionsUntilNextReask
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.questionsUntilNextReask, on: self)
-            .store(in: &cancellables)
-
-        schedulingCoordinator.$mode
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.schedulerMode, on: self)
-            .store(in: &cancellables)
+        bindProperty(schedulingCoordinator.$pendingCount, to: \.pendingMistakeCount)
+        bindProperty(schedulingCoordinator.$questionsUntilNextReask, to: \.questionsUntilNextReask)
+        bindProperty(schedulingCoordinator.$mode, to: \.schedulerMode)
 
         Publishers.CombineLatest(
             schedulingCoordinator.$queueSnapshot,
@@ -342,12 +312,10 @@ final class PracticeModel: ObservableObject {
     }
 
     func playQuestion(seed: UInt64? = nil) {
-        isReplaying = false
         engine.playQuestion(settings: settings, seed: seed)
     }
 
     func replay() {
-        isReplaying = true
         engine.replay()
     }
 
@@ -433,15 +401,8 @@ final class PracticeModel: ObservableObject {
     }
 
     private func bind() {
-        midiService.availableInputsPublisher
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.availableInputs, on: self)
-            .store(in: &cancellables)
-
-        midiService.connectedInputsPublisher
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.connectedInputs, on: self)
-            .store(in: &cancellables)
+        bindProperty(midiService.availableInputsPublisher, to: \.availableInputs)
+        bindProperty(midiService.connectedInputsPublisher, to: \.connectedInputs)
 
         midiService.availableOutputsPublisher
             .receive(on: DispatchQueue.main)
@@ -467,10 +428,7 @@ final class PracticeModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        midiService.isScanningPublisher
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.isScanningMIDI, on: self)
-            .store(in: &cancellables)
+        bindProperty(midiService.isScanningPublisher, to: \.isScanningMIDI)
 
         midiService.noteEvents
             .receive(on: DispatchQueue.main)
@@ -491,17 +449,14 @@ final class PracticeModel: ObservableObject {
                 switch state {
                 case .idle:
                     self.isPlaying = false
-                    self.isReplaying = false
                     self.currentSequence = nil
                     self.awaitingNoteIndex = nil
                 case .active(let sequence, let isPlayingBack):
                     self.isPlaying = isPlayingBack
                     self.currentSequence = sequence
                     self.awaitingNoteIndex = self.engine.currentInputIndex
-                    // isReplaying is set by caller before triggering state change
                 case .completed(let sequence, let hadErrors):
                     self.isPlaying = false
-                    self.isReplaying = false
                     self.currentSequence = sequence
                     self.awaitingNoteIndex = nil
                     self.handleSequenceCompleted(hadErrorsInSequence: hadErrors)
@@ -522,25 +477,10 @@ final class PracticeModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        engine.$errorNoteIndex
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.errorNoteIndex, on: self)
-            .store(in: &cancellables)
-
-        engine.$keysAreHeld
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.keysAreHeld, on: self)
-            .store(in: &cancellables)
-
-        engine.$currentAttemptNumber
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.currentAttemptNumber, on: self)
-            .store(in: &cancellables)
-
-        engine.$studyMode
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.isShowingAnswer, on: self)
-            .store(in: &cancellables)
+        bindProperty(engine.$errorNoteIndex, to: \.errorNoteIndex)
+        bindProperty(engine.$keysAreHeld, to: \.keysAreHeld)
+        bindProperty(engine.$currentAttemptNumber, to: \.currentAttemptNumber)
+        bindProperty(engine.$studyMode, to: \.isShowingAnswer)
     }
 
     private func handleSequenceCompleted(hadErrorsInSequence: Bool) {

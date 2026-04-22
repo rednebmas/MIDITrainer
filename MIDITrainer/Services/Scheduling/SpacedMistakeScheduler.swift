@@ -46,6 +46,10 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         clearance * max(minPasses, mistake.totalFailures ?? 1)
     }
 
+    private func tryOrLog(_ work: () throws -> Void) {
+        do { try work() } catch { /* log and continue */ }
+    }
+
     private func loadQueue() {
         do {
             queue = try repository.loadAll().map { queued in
@@ -73,7 +77,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                 }
 
                 if needsUpdate {
-                    do {
+                    tryOrLog {
                         try repository.update(
                             id: adjusted.id,
                             minimumClearanceDistance: adjusted.minimumClearanceDistance,
@@ -81,8 +85,6 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                             totalFailures: adjusted.totalFailures,
                             questionsSinceQueued: adjusted.questionsSinceQueued
                         )
-                    } catch {
-                        // Log error but continue with adjusted in-memory state
                     }
                 }
 
@@ -117,32 +119,27 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     }
 
     private func incrementCounters(excluding excludedId: Int64? = nil) {
-        do {
+        tryOrLog {
             try repository.incrementAllCounters(excluding: excludedId)
             for i in queue.indices where queue[i].id != excludedId {
                 queue[i].questionsSinceQueued += 1
             }
-        } catch {
-            // Log error but continue
         }
     }
 
     private func handleFreshCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, sourceName: String?) {
-        if hadErrors {
-            do {
-                var mistake = try repository.insert(seed: seed, settings: settings, sourceName: sourceName, clearance: clearance)
-                mistake.minimumClearanceDistance = derivedMin(for: mistake)
-                try repository.update(
-                    id: mistake.id,
-                    minimumClearanceDistance: mistake.minimumClearanceDistance,
-                    currentClearanceDistance: mistake.currentClearanceDistance,
-                    totalFailures: mistake.totalFailures,
-                    questionsSinceQueued: mistake.questionsSinceQueued
-                )
-                queue.append(mistake)
-            } catch {
-                // Log error but continue
-            }
+        guard hadErrors else { return }
+        tryOrLog {
+            var mistake = try repository.insert(seed: seed, settings: settings, sourceName: sourceName, clearance: clearance)
+            mistake.minimumClearanceDistance = derivedMin(for: mistake)
+            try repository.update(
+                id: mistake.id,
+                minimumClearanceDistance: mistake.minimumClearanceDistance,
+                currentClearanceDistance: mistake.currentClearanceDistance,
+                totalFailures: mistake.totalFailures,
+                questionsSinceQueued: mistake.questionsSinceQueued
+            )
+            queue.append(mistake)
         }
     }
 
@@ -166,11 +163,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
             mistake.questionsSinceQueued = 0
             if mistake.currentClearanceDistance >= derivedMin(for: mistake) {
                 queue.remove(at: index)
-                do {
-                    try repository.delete(id: mistakeId)
-                } catch {
-                    // Log error but continue
-                }
+                tryOrLog { try repository.delete(id: mistakeId) }
             } else {
                 mistake.currentClearanceDistance += clearance
                 mistake.minimumClearanceDistance = derivedMin(for: mistake)
@@ -181,7 +174,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     }
 
     private func persist(_ mistake: QueuedMistake) {
-        do {
+        tryOrLog {
             try repository.update(
                 id: mistake.id,
                 minimumClearanceDistance: mistake.minimumClearanceDistance,
@@ -189,8 +182,6 @@ final class SpacedMistakeScheduler: QuestionScheduler {
                 totalFailures: mistake.totalFailures,
                 questionsSinceQueued: mistake.questionsSinceQueued
             )
-        } catch {
-            // Log error but continue
         }
     }
 
@@ -223,11 +214,9 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     }
 
     func clearQueue() {
-        do {
+        tryOrLog {
             try repository.deleteAll()
             queue.removeAll()
-        } catch {
-            // Log error but continue
         }
     }
 }
