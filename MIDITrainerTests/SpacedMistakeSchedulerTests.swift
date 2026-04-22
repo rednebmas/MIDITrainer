@@ -179,6 +179,53 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
         XCTAssertEqual(updated.totalFailures, Optional(4), "Failure count should track actual failures, not be derived from spacing values")
     }
 
+    // MARK: - Failure steps back by clearance (floor at base)
+
+    func testFailureStepsBackByClearanceFromHighGap() {
+        // minPasses=5 so the card can accumulate passes without clearing.
+        let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { 3 }, minPassesProvider: { 5 })
+
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
+        let mistakeId = scheduler.queueSnapshot[0].id
+        XCTAssertEqual(scheduler.queueSnapshot[0].minimumClearanceDistance, 15, "floor 5: 3 × 5 = 15")
+
+        // Three successful passes: current 3 → 6 → 9 → 12 (none clear; min=15)
+        for expectedAfter in [6, 9, 12] {
+            let gap = scheduler.queueSnapshot.first { $0.id == mistakeId }!.currentClearanceDistance
+            advanceFreshQuestions(scheduler: scheduler, count: gap)
+            guard case .reask(_, _, let rid) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+            scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: false, mistakeId: rid, sourceName: nil)
+            XCTAssertEqual(scheduler.queueSnapshot.first { $0.id == mistakeId }!.currentClearanceDistance, expectedAfter)
+        }
+
+        // Now fail from current=12. Step-back: max(3, 12-3) = 9.
+        advanceFreshQuestions(scheduler: scheduler, count: 12)
+        guard case .reask(_, _, let ridFail) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: ridFail, sourceName: nil)
+
+        let afterFail = scheduler.queueSnapshot.first { $0.id == mistakeId }!
+        XCTAssertEqual(afterFail.currentClearanceDistance, 9,
+                       "Failure should step current back by one clearance unit (12 − 3 = 9), not reset to base")
+        XCTAssertEqual(afterFail.totalFailures, Optional(2), "totalFailures still increments on failure")
+        XCTAssertEqual(afterFail.minimumClearanceDistance, 15, "min derivation unchanged: max(5, 2) × 3 = 15")
+    }
+
+    func testFailureAtBaseStaysAtBase() {
+        let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { 3 })
+
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
+        let mistakeId = scheduler.queueSnapshot[0].id
+        XCTAssertEqual(scheduler.queueSnapshot[0].currentClearanceDistance, 3)
+
+        advanceFreshQuestions(scheduler: scheduler, count: 3)
+        guard case .reask(_, _, let rid) = scheduler.nextQuestion(currentSettings: settings) else { return XCTFail("Expected reask") }
+        scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: rid, sourceName: nil)
+
+        let after = scheduler.queueSnapshot.first { $0.id == mistakeId }!
+        XCTAssertEqual(after.currentClearanceDistance, 3, "max(3, 3-3) = 3 — stays at base floor")
+        XCTAssertEqual(after.totalFailures, Optional(2), "totalFailures still bumps")
+    }
+
     // MARK: - Mixed results: failure resets progress
 
     func testFailureAfterSuccessResetsCurrentClearance() {

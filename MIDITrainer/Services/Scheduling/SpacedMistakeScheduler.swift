@@ -8,7 +8,7 @@ import Foundation
 /// - After the required number of fresh questions, the mistake is re-asked.
 /// - If answered correctly on re-ask and `current >= min`, it's removed from the queue.
 /// - If answered correctly but `current < min`, current increases by `clearance` for another round.
-/// - If answered incorrectly on re-ask, current resets to `clearance` and min grows to reflect the new failure count.
+/// - If answered incorrectly on re-ask, current steps back by `clearance` (floor at base) and min grows to reflect the new failure count.
 ///
 /// `min` is derived, not persisted state:
 ///     min = clearance × max(minPasses, totalFailures)
@@ -150,10 +150,11 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         guard let index = queue.firstIndex(where: { $0.id == mistakeId }) else { return }
 
         if hadErrors {
-            // Failed the re-ask: bump failure count, reset current to base, re-derive min.
+            // Failed the re-ask: bump failure count, step current back by one clearance
+            // unit (floor at base clearance), and re-derive min.
             var mistake = queue[index]
             mistake.totalFailures = (mistake.totalFailures ?? 1) + 1
-            mistake.currentClearanceDistance = clearance
+            mistake.currentClearanceDistance = max(clearance, mistake.currentClearanceDistance - clearance)
             mistake.minimumClearanceDistance = derivedMin(for: mistake)
             mistake.questionsSinceQueued = 0
             queue[index] = mistake

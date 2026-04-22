@@ -83,13 +83,11 @@ final class SchedulingCoordinator: ObservableObject {
     }
     
     /// Records the completion of a sequence.
+    /// `activeMistakeId` is intentionally not cleared here — the id represents the mistake
+    /// associated with the currently displayed sequence, and it stays set until `nextQuestion`
+    /// transitions to the next question (or defer/clearQueue/setMode explicitly reset it).
     func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {
         activeScheduler.recordCompletion(seed: seed, settings: settings, hadErrors: hadErrors, mistakeId: mistakeId, sourceName: sourceName)
-        // Only clear activeMistakeId if there were no errors (sequence passed).
-        // If there were errors, a replay will happen and we're still testing this mistake.
-        if !hadErrors {
-            activeMistakeId = nil
-        }
         updatePublishedState()
     }
     

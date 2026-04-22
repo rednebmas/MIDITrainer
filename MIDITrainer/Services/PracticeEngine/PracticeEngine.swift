@@ -300,7 +300,7 @@ final class PracticeEngine: ObservableObject {
             schedulingCoordinator?.recordCompletion(
                 seed: seed,
                 settings: settings,
-                hadErrors: madeErrorInCurrentAttempt,
+                hadErrors: hadErrorsInSequence,
                 mistakeId: currentMistakeId,
                 sourceName: sequence.sourceName
             )
