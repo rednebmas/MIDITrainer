@@ -115,14 +115,14 @@ struct NoteOrbsContainerView: View {
 
                     #if DEBUG
                     HStack(spacing: 4) {
-                        if model.isReplaying {
-                            Text("Replay #\(model.currentAttemptNumber)")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.orange)
-                        } else if let gap = model.activeMistakeCurrentGap {
+                        if let gap = model.activeMistakeCurrentGap {
                             Text("Retry\(model.activeMistakeTotalFailures.map { " #\($0)" } ?? "") (gap \(gap))")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.yellow)
+                        } else if model.isReplaying {
+                            Text("Replay #\(model.currentAttemptNumber)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.orange)
                         } else {
                             Text("NEW")
                                 .font(.caption2.weight(.semibold))
