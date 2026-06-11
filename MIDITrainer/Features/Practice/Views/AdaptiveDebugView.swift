@@ -54,7 +54,8 @@ struct AdaptiveDebugSection: View {
                 AdaptiveMelodyRow(
                     entry: entry,
                     openDrills: snapshot.fragments.lazy.filter { $0.parentMistakeId == entry.id }.count,
-                    clearance: model.spacedMistakeClearance
+                    clearance: model.spacedMistakeClearance,
+                    minPasses: model.spacedMistakeMinPasses
                 )
             }
         }
@@ -69,16 +70,22 @@ private struct AdaptiveMelodyRow: View {
     let entry: SchedulerDebugEntry
     let openDrills: Int
     let clearance: Int
+    let minPasses: Int
 
     private var displayName: String {
         entry.mistake.sourceName ?? String(format: "#%04d", entry.mistake.seed % 10000)
     }
 
+    private var ladderProgress: String {
+        let rung = max(1, entry.mistake.currentClearanceDistance / max(1, clearance))
+        let required = max(minPasses, entry.mistake.totalFailures ?? 1)
+        return "pass \(rung)/\(required)"
+    }
+
     private var status: (text: String, color: Color) {
         if entry.isActive { return ("Rescue now", .green) }
         if openDrills > 0 { return ("Gated • \(openDrills) drill\(openDrills == 1 ? "" : "s") open", .purple) }
-        let remaining = clearance - entry.mistake.questionsSinceQueued
-        if remaining > 0 { return ("Waiting • \(remaining) to go", .blue) }
+        if entry.remainingUntilDue > 0 { return ("Waiting • \(entry.remainingUntilDue) to go", .blue) }
         return ("Rescue ready", .orange)
     }
 
@@ -93,7 +100,7 @@ private struct AdaptiveMelodyRow: View {
                 .background(status.color.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
-            Text("\(status.text) • failed \(entry.mistake.totalFailures ?? 1)x")
+            Text("\(status.text) • \(ladderProgress) • failed \(entry.mistake.totalFailures ?? 1)x")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 

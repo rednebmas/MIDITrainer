@@ -52,6 +52,7 @@ final class SchedulingCoordinator: ObservableObject {
             seedPicker: DifficultyTargetedSeedPicker(generator: sequenceGenerator),
             targetAccuracy: adaptiveTargetAccuracy,
             clearance: spacedMistakeClearance,
+            minPasses: spacedMistakeMinPasses,
             immediateDrills: adaptiveImmediateDrills
         )
 

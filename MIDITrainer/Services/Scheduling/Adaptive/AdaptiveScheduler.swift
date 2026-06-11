@@ -13,8 +13,10 @@ struct AdaptiveDebugSnapshot {
 ///
 /// Question priority: immediate drills (optional) → due spaced fragments →
 /// rescue re-asks of melodies whose fragments are cleared → fresh melodies
-/// generated at the difficulty dial. Melodies are never retired and clearance
-/// never escalates; the only way out of the queue is passing the rescue.
+/// generated at the difficulty dial. Melodies are never retired: they leave
+/// the queue only by climbing the same spaced-success ladder as
+/// spacedMistakes mode (clearance × max(minPasses, failures)), with fragment
+/// drills remediating the underlying interval between attempts.
 final class AdaptiveScheduler: QuestionScheduler {
     private let mistakeRepository: MistakeQueueRepository
     private let fragmentQueue: AdaptiveFragmentQueue
@@ -23,6 +25,7 @@ final class AdaptiveScheduler: QuestionScheduler {
     private let extractor = FragmentExtractor()
     private let targetAccuracy: () -> Double
     private let clearanceProvider: () -> Int
+    private let minPassesProvider: () -> Int
     private let immediateDrills: () -> Bool
     private let dial: DifficultyDial
     private var melodyQueue: [QueuedMistake] = []
@@ -35,6 +38,7 @@ final class AdaptiveScheduler: QuestionScheduler {
         seedPicker: DifficultyTargetedSeedPicker = DifficultyTargetedSeedPicker(),
         targetAccuracy: @escaping () -> Double,
         clearance: @escaping () -> Int = { 3 },
+        minPasses: @escaping () -> Int = { 3 },
         immediateDrills: @escaping () -> Bool = { false }
     ) {
         self.mistakeRepository = mistakeRepository
@@ -43,15 +47,34 @@ final class AdaptiveScheduler: QuestionScheduler {
         self.seedPicker = seedPicker
         self.targetAccuracy = targetAccuracy
         self.clearanceProvider = clearance
+        self.minPassesProvider = minPasses
         self.immediateDrills = immediateDrills
         let warmStart = (try? statsRepository.recentFirstGuessResults(
             filter: .allKeys, limit: AdaptiveTuning.rollingWindowSize
         )) ?? []
         self.dial = DifficultyDial(target: targetAccuracy, seedResults: warmStart)
-        self.melodyQueue = (try? mistakeRepository.loadAll()) ?? []
+        self.melodyQueue = []
+        self.melodyQueue = loadMelodyQueue()
+    }
+
+    private func loadMelodyQueue() -> [QueuedMistake] {
+        ((try? mistakeRepository.loadAll()) ?? []).map { mistake in
+            var adjusted = mistake
+            adjusted.minimumClearanceDistance = requiredDistance(for: adjusted)
+            adjusted.currentClearanceDistance = min(
+                max(clearance, adjusted.currentClearanceDistance),
+                adjusted.minimumClearanceDistance
+            )
+            return adjusted
+        }
+    }
+
+    private func requiredDistance(for mistake: QueuedMistake) -> Int {
+        mistake.requiredClearanceDistance(clearance: clearance, minPasses: minPasses)
     }
 
     private var clearance: Int { max(1, clearanceProvider()) }
+    private var minPasses: Int { max(1, minPassesProvider()) }
 
     // MARK: - QuestionScheduler
 
@@ -108,7 +131,7 @@ final class AdaptiveScheduler: QuestionScheduler {
     var questionsUntilNextReask: Int? {
         let remaining = melodyQueue
             .filter { fragmentQueue.fragmentCount(forParent: $0.id) == 0 }
-            .map { clearance - $0.questionsSinceQueued }
+            .map { $0.currentClearanceDistance - $0.questionsSinceQueued }
             .filter { $0 > 0 }
         return remaining.min()
     }
@@ -125,7 +148,7 @@ final class AdaptiveScheduler: QuestionScheduler {
     }
 
     func reload() {
-        melodyQueue = (try? mistakeRepository.loadAll()) ?? []
+        melodyQueue = loadMelodyQueue()
         fragmentQueue.reload()
         pendingImmediateFragmentIds = []
     }
@@ -155,7 +178,7 @@ final class AdaptiveScheduler: QuestionScheduler {
     }
 
     private func isRescueDue(_ mistake: QueuedMistake) -> Bool {
-        mistake.questionsSinceQueued >= clearance
+        mistake.questionsSinceQueued >= mistake.currentClearanceDistance
             && fragmentQueue.fragmentCount(forParent: mistake.id) == 0
     }
 
@@ -214,16 +237,29 @@ final class AdaptiveScheduler: QuestionScheduler {
         queueFragments(from: report, parentMistakeId: mistake.id)
     }
 
+    /// Success climbs the same spaced-repetition ladder as spacedMistakes
+    /// mode: each pass widens the gap by one clearance unit, clearing once it
+    /// reaches clearance × max(minPasses, totalFailures) — so failures inflate
+    /// the required proof. Failure steps the ladder back one rung (floor at
+    /// base) and additionally re-gates the melody behind fragment drills.
     private func handleRescueCompletion(mistakeId: Int64, report: CompletionReport) {
         guard let index = melodyQueue.firstIndex(where: { $0.id == mistakeId }) else { return }
+        melodyQueue[index].questionsSinceQueued = 0
         if report.hadErrors {
             melodyQueue[index].totalFailures = (melodyQueue[index].totalFailures ?? 1) + 1
-            melodyQueue[index].questionsSinceQueued = 0
+            melodyQueue[index].currentClearanceDistance = max(
+                clearance, melodyQueue[index].currentClearanceDistance - clearance
+            )
+            melodyQueue[index].minimumClearanceDistance = requiredDistance(for: melodyQueue[index])
             persist(melodyQueue[index])
             queueFragments(from: report, parentMistakeId: mistakeId)
-        } else {
+        } else if melodyQueue[index].currentClearanceDistance >= requiredDistance(for: melodyQueue[index]) {
             try? mistakeRepository.delete(id: mistakeId)
             melodyQueue.remove(at: index)
+        } else {
+            melodyQueue[index].currentClearanceDistance += clearance
+            melodyQueue[index].minimumClearanceDistance = requiredDistance(for: melodyQueue[index])
+            persist(melodyQueue[index])
         }
     }
 

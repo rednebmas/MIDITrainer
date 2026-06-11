@@ -17,13 +17,14 @@ final class AdaptiveSchedulerTests: XCTestCase {
         immediateDrills = false
     }
 
-    private func makeScheduler() -> AdaptiveScheduler {
+    private func makeScheduler(minPasses: Int = 1) -> AdaptiveScheduler {
         AdaptiveScheduler(
             mistakeRepository: mistakeRepo,
             fragmentQueue: AdaptiveFragmentQueue(repository: fragmentRepo, octaveMatters: { true }),
             statsRepository: StatsRepository(db: db),
             targetAccuracy: { 0.70 },
             clearance: { 3 },
+            minPasses: { minPasses },
             immediateDrills: { [unowned self] in self.immediateDrills }
         )
     }
@@ -181,9 +182,67 @@ final class AdaptiveSchedulerTests: XCTestCase {
         XCTAssertEqual(scheduler.debugSnapshot.fragments[0].totalFailures, 2)
     }
 
-    // MARK: - Rescue failure re-gates without escalation
+    // MARK: - Spaced-success ladder
 
-    func testFailedRescueRegatesWithoutEscalation() {
+    func testRescuePassClimbsLadderUntilMinPasses() {
+        let scheduler = makeScheduler(minPasses: 2)
+        scheduler.record(report(.fresh, seed: 100, notes: [60, 64, 67], failed: [0]))
+
+        for seed in UInt64(200)...202 {
+            passFresh(scheduler, seed: seed)
+        }
+        guard case .reask(_, _, let mistakeId) = scheduler.nextQuestion(currentSettings: settings) else {
+            return XCTFail("Expected first rescue")
+        }
+        scheduler.record(report(.reask(mistakeId: mistakeId), seed: 100, notes: [60, 64, 67]))
+
+        XCTAssertEqual(scheduler.queueSnapshot.count, 1, "one pass is not enough with minPasses=2")
+        XCTAssertEqual(scheduler.queueSnapshot[0].currentClearanceDistance, 6, "gap widens after a pass")
+        XCTAssertEqual(scheduler.queueSnapshot[0].questionsSinceQueued, 0)
+
+        for seed in UInt64(300)...305 {
+            guard case .fresh = scheduler.nextQuestion(currentSettings: settings) else {
+                return XCTFail("Second rescue should wait the widened 6-question gap")
+            }
+            passFresh(scheduler, seed: seed)
+        }
+        guard case .reask(_, _, let secondId) = scheduler.nextQuestion(currentSettings: settings) else {
+            return XCTFail("Expected second rescue after 6 questions")
+        }
+        scheduler.record(report(.reask(mistakeId: secondId), seed: 100, notes: [60, 64, 67]))
+        XCTAssertEqual(scheduler.pendingCount, 0, "second spaced pass clears the melody")
+    }
+
+    func testFailedRescueStepsLadderBackOneRung() {
+        let scheduler = makeScheduler(minPasses: 3)
+        scheduler.record(report(.fresh, seed: 100, notes: [60, 64, 67], failed: [0]))
+
+        for seed in UInt64(200)...202 {
+            passFresh(scheduler, seed: seed)
+        }
+        guard case .reask(_, _, let mistakeId) = scheduler.nextQuestion(currentSettings: settings) else {
+            return XCTFail("Expected first rescue")
+        }
+        scheduler.record(report(.reask(mistakeId: mistakeId), seed: 100, notes: [60, 64, 67]))
+        XCTAssertEqual(scheduler.queueSnapshot[0].currentClearanceDistance, 6)
+
+        for seed in UInt64(300)...305 {
+            passFresh(scheduler, seed: seed)
+        }
+        guard case .reask(_, _, let secondId) = scheduler.nextQuestion(currentSettings: settings) else {
+            return XCTFail("Expected second rescue")
+        }
+        scheduler.record(report(.reask(mistakeId: secondId), seed: 100, notes: [60, 64, 67], failed: [1]))
+
+        let after = scheduler.queueSnapshot[0]
+        XCTAssertEqual(after.currentClearanceDistance, 3, "failure steps the ladder back one rung")
+        XCTAssertEqual(after.totalFailures, 2)
+        XCTAssertEqual(scheduler.debugSnapshot.gatedParentIds, [secondId], "failure re-gates with fragments")
+    }
+
+    // MARK: - Rescue failure re-gates and inflates like spaced mode
+
+    func testFailedRescueRegatesAndInflatesRequirement() {
         let scheduler = makeScheduler()
         scheduler.record(report(.fresh, seed: 100, notes: [60, 64, 67], failed: [0]))
         let parent = scheduler.queueSnapshot[0]
@@ -200,7 +259,8 @@ final class AdaptiveSchedulerTests: XCTestCase {
         let after = scheduler.queueSnapshot[0]
         XCTAssertEqual(after.questionsSinceQueued, 0)
         XCTAssertEqual(after.totalFailures, 2)
-        XCTAssertEqual(after.currentClearanceDistance, parent.currentClearanceDistance, "no escalation in adaptive mode")
+        XCTAssertEqual(after.currentClearanceDistance, parent.currentClearanceDistance, "current steps back, floored at base")
+        XCTAssertEqual(after.minimumClearanceDistance, 6, "2 failures × clearance 3 inflate the requirement (minPasses 1)")
         XCTAssertEqual(scheduler.debugSnapshot.fragments.count, 1, "failed rescue re-gates with fresh fragments")
         XCTAssertEqual(scheduler.debugSnapshot.gatedParentIds, [mistakeId])
     }

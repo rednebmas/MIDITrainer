@@ -43,7 +43,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     }
 
     private func derivedMin(for mistake: QueuedMistake) -> Int {
-        clearance * max(minPasses, mistake.totalFailures ?? 1)
+        mistake.requiredClearanceDistance(clearance: clearance, minPasses: minPasses)
     }
 
     private func tryOrLog(_ work: () throws -> Void) {

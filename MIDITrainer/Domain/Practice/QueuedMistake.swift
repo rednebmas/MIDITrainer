@@ -51,6 +51,12 @@ struct QueuedMistake: Equatable, Codable {
         self.queuedAt = queuedAt
     }
 
+    /// The clearance distance `currentClearanceDistance` must reach before a
+    /// successful re-ask clears this mistake. Failures inflate the requirement.
+    func requiredClearanceDistance(clearance: Int, minPasses: Int) -> Int {
+        clearance * max(minPasses, totalFailures ?? 1)
+    }
+
     /// Creates a queued mistake with all values specified (for loading from persistence).
     init(
         id: Int64,

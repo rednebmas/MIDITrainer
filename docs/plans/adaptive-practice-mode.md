@@ -33,8 +33,13 @@ point framework) puts the productive zone well above where that queue sat.
   "↑P4 drill from Dark Horse".
 - **Fragments gate the melody**: the failed melody's re-ask waits until its
   fragments clear, then arrives as a "rescue" one clearance gap later.
-  Passing the rescue is the only way out of the queue — melodies are never
-  retired, and clearance never escalates in this mode.
+- **Spaced-success ladder**: identical semantics to spacedMistakes mode.
+  Passing a rescue widens the gap by one clearance unit (3 → 6 → 9 …); the
+  melody clears once the gap reaches clearance × max(minPasses, failures),
+  so repeated failures demand more spaced proof. Failing a rescue steps the
+  ladder back one rung (floor at base) and — the adaptive difference —
+  re-gates the melody behind fragment drills so the broken interval gets
+  rebuilt before the next attempt. Melodies are never retired.
 - **Immediate drills** (toggle, default off): when on, a failed melody's
   fragments are asked right after it completes, before spaced rotation.
 
