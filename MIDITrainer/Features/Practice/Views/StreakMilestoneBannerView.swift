@@ -59,7 +59,7 @@ struct StreakMilestoneBannerView: View {
     }
 
     private func text(for milestone: Int) -> String {
-        milestone == 1 ? "FIRST PERFECT!" : "\(milestone) STREAK"
+        milestone == 1 ? "CORRECT!" : "\(milestone) STREAK"
     }
 
     private func showBanner(for milestone: Int) {
