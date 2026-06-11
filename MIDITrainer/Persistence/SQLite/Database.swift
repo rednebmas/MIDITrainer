@@ -174,6 +174,9 @@ extension Database {
                 );
                 """,
                 "CREATE INDEX IF NOT EXISTS idx_fragment_queue_parent ON fragment_queue(parentMistakeId);"
+            ]),
+            Migration(version: 9, statements: [
+                "ALTER TABLE mistake_queue ADD COLUMN clearedAt REAL;"
             ])
         ]
     }()

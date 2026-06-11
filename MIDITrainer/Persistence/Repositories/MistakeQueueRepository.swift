@@ -58,12 +58,13 @@ final class MistakeQueueRepository {
         }
     }
     
-    /// Loads all queued mistakes ordered by queuedAt (FIFO).
+    /// Loads all active (not yet cleared) mistakes ordered by queuedAt (FIFO).
     func loadAll() throws -> [QueuedMistake] {
         try db.readWrite { handle in
             let sql = """
             SELECT id, seed, settingsJson, sourceName, clearanceDistance, currentClearanceDistance, totalFailures, questionsSinceQueued, queuedAt
             FROM mistake_queue
+            WHERE clearedAt IS NULL
             ORDER BY queuedAt ASC;
             """
             var statement: OpaquePointer?
@@ -177,28 +178,31 @@ final class MistakeQueueRepository {
         }
     }
     
-    /// Removes a mistake from the queue (when answered correctly on a due re-ask).
-    func delete(id: Int64) throws {
+    /// Marks a mistake as cleared by mastery (soft delete). The row stays for
+    /// lifetime stats like the melodies-cleared count.
+    func markCleared(id: Int64, now: Date = Date()) throws {
         try db.readWrite { handle in
-            let sql = "DELETE FROM mistake_queue WHERE id = ?;"
+            let sql = "UPDATE mistake_queue SET clearedAt = ? WHERE id = ?;"
             var statement: OpaquePointer?
             guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else {
-                throw DatabaseError.statementFailed(message: "Failed to prepare mistake_queue delete")
+                throw DatabaseError.statementFailed(message: "Failed to prepare mistake_queue markCleared")
             }
             defer { sqlite3_finalize(statement) }
-            
-            sqlite3_bind_int64(statement, 1, id)
-            
+
+            sqlite3_bind_double(statement, 1, now.timeIntervalSince1970)
+            sqlite3_bind_int64(statement, 2, id)
+
             guard sqlite3_step(statement) == SQLITE_DONE else {
-                throw DatabaseError.statementFailed(message: "Failed to delete from mistake_queue")
+                throw DatabaseError.statementFailed(message: "Failed to mark mistake_queue row cleared")
             }
         }
     }
-    
-    /// Clears all entries from the queue.
+
+    /// Removes all active entries from the queue. Cleared rows are kept —
+    /// abandoning the queue is not mastery and must not erase that history.
     func deleteAll() throws {
         try db.readWrite { handle in
-            try Database.execute(statement: "DELETE FROM mistake_queue;", db: handle)
+            try Database.execute(statement: "DELETE FROM mistake_queue WHERE clearedAt IS NULL;", db: handle)
         }
     }
 }

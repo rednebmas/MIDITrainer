@@ -167,7 +167,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
             mistake.questionsSinceQueued = 0
             if mistake.currentClearanceDistance >= derivedMin(for: mistake) {
                 queue.remove(at: index)
-                tryOrLog { try repository.delete(id: mistakeId) }
+                tryOrLog { try repository.markCleared(id: mistakeId) }
             } else {
                 mistake.currentClearanceDistance += clearance
                 mistake.minimumClearanceDistance = derivedMin(for: mistake)

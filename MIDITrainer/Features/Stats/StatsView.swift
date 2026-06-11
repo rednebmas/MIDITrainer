@@ -21,6 +21,8 @@ struct StatsView: View {
                 
                 FirstTrySection(firstTry: model.firstTryAccuracy)
 
+                QueueStrengthSection(strength: model.queueStrength)
+
                 RecoverySection(recovery: model.recoveryStats)
 
                 RecoveryTrendSection(trend: model.recoveryTrend)
@@ -125,6 +127,43 @@ private struct FirstTrySection: View {
                 }
             } else {
                 Text("No sequences yet for these settings.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct QueueStrengthSection: View {
+    let strength: QueueStrength?
+
+    var body: some View {
+        Section("Melody queue strength") {
+            if let strength {
+                HStack(alignment: .top, spacing: 32) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(strength.averageClearance.map { String(format: "%.1f", $0) } ?? "—")
+                            .font(.title2.bold())
+                        Text("Average clearance")
+                            .foregroundStyle(.secondary)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(strength.clearedCount)")
+                            .font(.title2.bold())
+                        Text("Melodies cleared")
+                            .foregroundStyle(.secondary)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(strength.activeCount)")
+                            .font(.title2.bold())
+                        Text("In queue")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text("Average re-ask gap across queued melodies — rising means you're holding melodies over longer stretches.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("No queue data yet.")
                     .foregroundStyle(.secondary)
             }
         }

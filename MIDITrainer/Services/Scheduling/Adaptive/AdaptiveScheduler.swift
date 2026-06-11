@@ -254,7 +254,7 @@ final class AdaptiveScheduler: QuestionScheduler {
             persist(melodyQueue[index])
             queueFragments(from: report, parentMistakeId: mistakeId)
         } else if melodyQueue[index].currentClearanceDistance >= requiredDistance(for: melodyQueue[index]) {
-            try? mistakeRepository.delete(id: mistakeId)
+            try? mistakeRepository.markCleared(id: mistakeId)
             melodyQueue.remove(at: index)
         } else {
             melodyQueue[index].currentClearanceDistance += clearance
