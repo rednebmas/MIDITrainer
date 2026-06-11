@@ -8,20 +8,27 @@ final class SchedulingCoordinator: ObservableObject {
     @Published private(set) var questionsUntilNextReask: Int?
     @Published private(set) var queueSnapshot: [QueuedMistake] = []
     @Published private(set) var activeMistakeId: Int64?
+    @Published private(set) var adaptiveSnapshot: AdaptiveDebugSnapshot?
 
     private var activeScheduler: QuestionScheduler
     private let spacedScheduler: SpacedMistakeScheduler
     private let weaknessScheduler: WeaknessFocusedScheduler
     private let randomScheduler: RandomScheduler
+    private let adaptiveScheduler: AdaptiveScheduler
     private let onModeChange: (SchedulerMode) -> Void
 
     init(
         initialMode: SchedulerMode,
         repository: MistakeQueueRepository,
+        fragmentRepository: FragmentQueueRepository,
         statsRepository: StatsRepository,
+        sequenceGenerator: SequenceGenerator = SequenceGenerator(),
         weaknessMatchExactSettings: @escaping () -> Bool = { false },
         spacedMistakeClearance: @escaping () -> Int = { 3 },
         spacedMistakeMinPasses: @escaping () -> Int = { 3 },
+        adaptiveTargetAccuracy: @escaping () -> Double = { 0.70 },
+        adaptiveImmediateDrills: @escaping () -> Bool = { false },
+        octaveMatters: @escaping () -> Bool = { true },
         onModeChange: @escaping (SchedulerMode) -> Void
     ) {
         self.mode = initialMode
@@ -37,38 +44,43 @@ final class SchedulingCoordinator: ObservableObject {
             matchExactSettings: weaknessMatchExactSettings
         )
         self.randomScheduler = RandomScheduler()
+        self.adaptiveScheduler = AdaptiveScheduler(
+            mistakeRepository: repository,
+            fragmentQueue: AdaptiveFragmentQueue(repository: fragmentRepository, octaveMatters: octaveMatters),
+            statsRepository: statsRepository,
+            seedPicker: DifficultyTargetedSeedPicker(generator: sequenceGenerator),
+            targetAccuracy: adaptiveTargetAccuracy,
+            clearance: spacedMistakeClearance,
+            immediateDrills: adaptiveImmediateDrills
+        )
 
-        switch initialMode {
-        case .spacedMistakes:
-            self.activeScheduler = spacedScheduler
-        case .weaknessFocused:
-            self.activeScheduler = weaknessScheduler
-        case .random:
-            self.activeScheduler = randomScheduler
-        }
+        self.activeScheduler = randomScheduler
+        self.activeScheduler = scheduler(for: initialMode)
 
         updatePublishedState()
     }
-    
+
+    private func scheduler(for mode: SchedulerMode) -> QuestionScheduler {
+        switch mode {
+        case .spacedMistakes: return spacedScheduler
+        case .weaknessFocused: return weaknessScheduler
+        case .random: return randomScheduler
+        case .adaptive: return adaptiveScheduler
+        }
+    }
+
     /// Switches to a new scheduling mode.
     func setMode(_ newMode: SchedulerMode) {
         guard newMode != mode else { return }
         mode = newMode
-
-        switch newMode {
-        case .spacedMistakes:
-            activeScheduler = spacedScheduler
-        case .weaknessFocused:
-            activeScheduler = weaknessScheduler
-        case .random:
-            activeScheduler = randomScheduler
-        }
+        activeScheduler = scheduler(for: newMode)
+        activeScheduler.reload()
         activeMistakeId = nil
 
         onModeChange(newMode)
         updatePublishedState()
     }
-    
+
     /// Returns the next question to present.
     func nextQuestion(currentSettings: PracticeSettingsSnapshot) -> NextQuestion {
         let result = activeScheduler.nextQuestion(currentSettings: currentSettings)
@@ -77,18 +89,42 @@ final class SchedulingCoordinator: ObservableObject {
             activeMistakeId = nil
         case .reask(_, _, let mistakeId):
             activeMistakeId = mistakeId
+        case .fragment:
+            activeMistakeId = nil
         }
         updatePublishedState()
         return result
     }
-    
+
     /// Records the completion of a sequence.
     /// `activeMistakeId` is intentionally not cleared here — the id represents the mistake
     /// associated with the currently displayed sequence, and it stays set until `nextQuestion`
     /// transitions to the next question (or defer/clearQueue/setMode explicitly reset it).
-    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {
-        activeScheduler.recordCompletion(seed: seed, settings: settings, hadErrors: hadErrors, mistakeId: mistakeId, sourceName: sourceName)
+    func recordCompletion(_ report: CompletionReport) {
+        if let adaptive = activeScheduler as? AdaptiveScheduler {
+            adaptive.record(report)
+        } else if let seed = report.seed {
+            activeScheduler.recordCompletion(
+                seed: seed,
+                settings: report.settings,
+                hadErrors: report.hadErrors,
+                mistakeId: report.question.mistakeId,
+                sourceName: report.sourceName
+            )
+        }
         updatePublishedState()
+    }
+
+    func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {
+        recordCompletion(CompletionReport(
+            seed: seed,
+            settings: settings,
+            hadErrors: hadErrors,
+            question: mistakeId.map { .reask(mistakeId: $0) } ?? .fresh,
+            sourceName: sourceName,
+            notes: [],
+            firstAttemptFailedIndices: []
+        ))
     }
     
     /// Defers the currently active re-ask: resets its wait counter so it's no longer due.
@@ -99,16 +135,18 @@ final class SchedulingCoordinator: ObservableObject {
         updatePublishedState()
     }
 
-    /// Clears all pending mistakes from the queue.
+    /// Clears all pending mistakes and fragments (the schedulers share tables).
     func clearQueue() {
         spacedScheduler.clearQueue()
+        adaptiveScheduler.clearQueue()
         activeMistakeId = nil
         updatePublishedState()
     }
-    
+
     private func updatePublishedState() {
         pendingCount = activeScheduler.pendingCount
         questionsUntilNextReask = activeScheduler.questionsUntilNextReask
         queueSnapshot = activeScheduler.queueSnapshot
+        adaptiveSnapshot = mode == .adaptive ? adaptiveScheduler.debugSnapshot : nil
     }
 }

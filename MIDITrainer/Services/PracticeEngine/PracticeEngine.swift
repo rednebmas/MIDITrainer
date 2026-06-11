@@ -68,6 +68,10 @@ final class PracticeEngine: ObservableObject {
     private(set) var currentSeed: UInt64?
     /// If the current sequence is a re-ask, this is the mistake ID
     private var currentMistakeId: Int64?
+    /// If the current sequence is a fragment drill, this is the fragment ID
+    private var currentFragmentId: Int64?
+    /// Note indices answered incorrectly on the first guess of the first attempt
+    private var firstAttemptErrorIndices: Set<Int> = []
     /// Whether we've already recorded a completion for the current sequence (to avoid duplicates on replays)
     private var hasRecordedCompletion: Bool = false
     /// Whether the user ever made an error on the current sequence (persists across replays)
@@ -134,41 +138,67 @@ final class PracticeEngine: ObservableObject {
         if let coordinator = schedulingCoordinator {
             questionToPlay = coordinator.nextQuestion(currentSettings: settings)
         } else {
-            questionToPlay = .fresh
+            questionToPlay = .fresh(seed: nil)
         }
         
         switch questionToPlay {
-        case .fresh:
-            let selectedSeed = seed ?? UInt64.random(in: .min ... .max)
+        case .fresh(let schedulerSeed):
+            let selectedSeed = schedulerSeed ?? seed ?? UInt64.random(in: .min ... .max)
             startSequence(settings: settings, seed: selectedSeed, mistakeId: nil)
         case .reask(let reaskSeed, let reaskSettings, let mistakeId):
             startSequence(settings: reaskSettings, seed: reaskSeed, mistakeId: mistakeId)
+        case .fragment(let drill):
+            startFragmentSequence(drill: drill, settings: settings)
         }
     }
-    
+
     private func startSequence(settings: PracticeSettingsSnapshot, seed: UInt64, mistakeId: Int64?) {
+        // Fetch interval error rates if weighting is enabled and melody source is random
+        let intervalErrorRates: [StatBucket]?
+        if weightIntervalsByErrorRate(), settings.melodySourceType == .random, let statsRepo = statsRepository {
+            let filter = StatsFilter.key(settings.key, settings.scaleType)
+            intervalErrorRates = try? statsRepo.mistakeRateByInterval(filter: filter)
+        } else {
+            intervalErrorRates = nil
+        }
+
+        let sequence = sequenceGenerator.generate(settings: settings, seed: seed, intervalErrorRates: intervalErrorRates)
+        begin(sequence: sequence, settings: settings, seed: seed, mistakeId: mistakeId, fragmentId: nil)
+    }
+
+    private func startFragmentSequence(drill: FragmentDrill, settings: PracticeSettingsSnapshot) {
+        let notes = drill.midiNotes.enumerated().map { index, midiNote in
+            MelodyNote(midiNoteNumber: midiNote, startBeat: Double(index) * 2, durationBeats: 2, index: index)
+        }
+        let sequence = MelodySequence(
+            notes: notes,
+            key: settings.key,
+            scaleType: settings.scaleType,
+            excludedDegrees: settings.excludedDegrees,
+            allowedOctaves: settings.allowedOctaves,
+            bpm: settings.bpm,
+            seed: nil,
+            sourceId: "fragment",
+            sourceTitle: drill.label,
+            chords: nil
+        )
+        begin(sequence: sequence, settings: settings, seed: nil, mistakeId: nil, fragmentId: drill.fragmentId)
+    }
+
+    private func begin(sequence: MelodySequence, settings: PracticeSettingsSnapshot, seed: UInt64?, mistakeId: Int64?, fragmentId: Int64?) {
         do {
             // Stop any existing chord loop before starting a new sequence
             playbackScheduler.stopChordLoop()
 
             let session = try ensureSession(for: settings)
-
-            // Fetch interval error rates if weighting is enabled and melody source is random
-            let intervalErrorRates: [StatBucket]?
-            if weightIntervalsByErrorRate(), settings.melodySourceType == .random, let statsRepo = statsRepository {
-                let filter = StatsFilter.key(settings.key, settings.scaleType)
-                intervalErrorRates = try? statsRepo.mistakeRateByInterval(filter: filter)
-            } else {
-                intervalErrorRates = nil
-            }
-
-            let sequence = sequenceGenerator.generate(settings: settings, seed: seed, intervalErrorRates: intervalErrorRates)
             let ids = try sequenceRepository.insert(sequence: sequence, sessionId: session.id, settingsSnapshotId: session.settingsSnapshotId)
             currentSequenceIDs = ids
             currentSeed = seed
             currentMistakeId = mistakeId
+            currentFragmentId = fragmentId
             hasRecordedCompletion = false
             hadErrorsInSequence = false
+            firstAttemptErrorIndices = []
             lastCorrectExpected = nil
             lastCorrectGuessed = nil
             currentInputIndex = 0
@@ -287,6 +317,9 @@ final class PracticeEngine: ObservableObject {
             errorNoteIndex = currentInputIndex
             madeErrorInCurrentAttempt = true
             hadErrorsInSequence = true
+            if currentAttemptNumber == 1 {
+                firstAttemptErrorIndices.insert(currentInputIndex)
+            }
         }
     }
     
@@ -295,15 +328,25 @@ final class PracticeEngine: ObservableObject {
         playbackScheduler.stopChordLoop()
 
         // Notify the scheduler of the completion (only once per sequence, not on replays)
-        if !hasRecordedCompletion, let seed = currentSeed, let settings = settings {
+        if !hasRecordedCompletion, let settings = settings {
             hasRecordedCompletion = true
-            schedulingCoordinator?.recordCompletion(
-                seed: seed,
+            let question: AskedQuestion
+            if let fragmentId = currentFragmentId {
+                question = .fragment(fragmentId: fragmentId)
+            } else if let mistakeId = currentMistakeId {
+                question = .reask(mistakeId: mistakeId)
+            } else {
+                question = .fresh
+            }
+            schedulingCoordinator?.recordCompletion(CompletionReport(
+                seed: currentSeed,
                 settings: settings,
                 hadErrors: hadErrorsInSequence,
-                mistakeId: currentMistakeId,
-                sourceName: sequence.sourceName
-            )
+                question: question,
+                sourceName: sequence.sourceName,
+                notes: sequence.notes.map(\.midiNoteNumber),
+                firstAttemptFailedIndices: firstAttemptErrorIndices
+            ))
         }
 
         let delaySeconds = settings.map { 60.0 / Double($0.bpm) } ?? 0.5

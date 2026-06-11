@@ -13,11 +13,16 @@ enum SchedulerMode: String, Codable, CaseIterable, Equatable {
     /// No reinforcement; each question is a fresh random sequence.
     case random = "random"
 
+    /// Steers difficulty toward a target accuracy and drills missed intervals
+    /// as 2-note fragments before re-asking the failed melody.
+    case adaptive = "adaptive"
+
     var displayName: String {
         switch self {
         case .spacedMistakes: return "Spaced Mistakes"
         case .weaknessFocused: return "Weakness Focused"
         case .random: return "Random"
+        case .adaptive: return "Adaptive"
         }
     }
 
@@ -29,6 +34,8 @@ enum SchedulerMode: String, Codable, CaseIterable, Equatable {
             return "Focuses on sequences you struggle with most"
         case .random:
             return "Always generates fresh questions"
+        case .adaptive:
+            return "Targets your accuracy goal; drills missed intervals as 2-note fragments"
         }
     }
 }

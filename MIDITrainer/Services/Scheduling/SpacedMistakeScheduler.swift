@@ -95,6 +95,10 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         }
     }
 
+    func reload() {
+        loadQueue()
+    }
+
     func nextQuestion(currentSettings: PracticeSettingsSnapshot) -> NextQuestion {
         // Find the first due mistake (FIFO order, already sorted by queuedAt)
         if let dueIndex = queue.firstIndex(where: { $0.isDue }) {
@@ -105,7 +109,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         }
 
         // No due mistakes, return fresh
-        return .fresh
+        return .fresh(seed: nil)
     }
 
     func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {

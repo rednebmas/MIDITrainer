@@ -111,6 +111,14 @@ final class SettingsStore: ObservableObject {
     @Published var spacedMistakeMinPasses: Int {
         didSet { defaults.set(spacedMistakeMinPasses, forKey: spacedMistakeMinPassesKey) }
     }
+    /// First-guess accuracy the adaptive mode steers toward (0.65–0.95)
+    @Published var adaptiveTargetAccuracy: Double {
+        didSet { defaults.set(adaptiveTargetAccuracy, forKey: adaptiveTargetAccuracyKey) }
+    }
+    /// Whether adaptive mode drills a failed melody's fragments immediately after the failure
+    @Published var adaptiveImmediateDrills: Bool {
+        didSet { defaults.set(adaptiveImmediateDrills, forKey: adaptiveImmediateDrillsKey) }
+    }
 
     private var deviceSettingsCache: [String: DeviceSettings] = [:]
 
@@ -139,6 +147,8 @@ final class SettingsStore: ObservableObject {
     private let showNoteOrbsKey = "com.sambender.miditrainer.showNoteOrbs"
     private let spacedMistakeClearanceKey = "com.sambender.miditrainer.spacedMistakeClearance"
     private let spacedMistakeMinPassesKey = "com.sambender.miditrainer.spacedMistakeMinPasses"
+    private let adaptiveTargetAccuracyKey = "com.sambender.miditrainer.adaptiveTargetAccuracy"
+    private let adaptiveImmediateDrillsKey = "com.sambender.miditrainer.adaptiveImmediateDrills"
     private let deviceSettingsKey = "com.sambender.miditrainer.deviceSettings"
 
     private var todayDateString: String {
@@ -189,6 +199,8 @@ final class SettingsStore: ObservableObject {
         self.showNoteOrbs = defaults.object(forKey: showNoteOrbsKey) as? Bool ?? true
         self.spacedMistakeClearance = defaults.object(forKey: spacedMistakeClearanceKey) as? Int ?? 3
         self.spacedMistakeMinPasses = defaults.object(forKey: spacedMistakeMinPassesKey) as? Int ?? 3
+        self.adaptiveTargetAccuracy = defaults.object(forKey: adaptiveTargetAccuracyKey) as? Double ?? 0.70
+        self.adaptiveImmediateDrills = defaults.object(forKey: adaptiveImmediateDrillsKey) as? Bool ?? false
 
         if let data = defaults.data(forKey: deviceSettingsKey),
            let decoded = try? JSONDecoder().decode([String: DeviceSettings].self, from: data) {

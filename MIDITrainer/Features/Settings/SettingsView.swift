@@ -33,6 +33,25 @@ struct SettingsView: View {
 
                         WeaknessQueueDebugView(settings: draft, matchExactSettings: settingsStore.weaknessMatchExactSettings)
                     }
+
+                    if settingsStore.schedulerMode == .adaptive {
+                        VStack(alignment: .leading) {
+                            Text("Target accuracy: \(Int((settingsStore.adaptiveTargetAccuracy * 100).rounded()))%")
+                            Slider(value: $settingsStore.adaptiveTargetAccuracy, in: 0.65...0.95, step: 0.01)
+                        }
+
+                        Text("Melodies are chosen so your first-guess accuracy stays near the target — harder when you run hot, easier when you run cold")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Toggle("Drill mistakes immediately", isOn: $settingsStore.adaptiveImmediateDrills)
+
+                        Text(settingsStore.adaptiveImmediateDrills
+                            ? "After a failed melody, its 2-note drills are asked right away, then spaced until cleared"
+                            : "2-note drills surface through spaced rotation within a couple of questions")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("Key & Scale") {

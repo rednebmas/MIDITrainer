@@ -23,8 +23,8 @@ final class SequenceRepository {
 
     private func insertSequence(sequence: MelodySequence, sessionId: Int64, settingsSnapshotId: Int64, db: OpaquePointer) throws -> Int64 {
         let sql = """
-        INSERT INTO melody_sequence (sessionId, settingsSnapshotId, seed, sourceName, createdAt)
-        VALUES (?, ?, ?, ?, ?);
+        INSERT INTO melody_sequence (sessionId, settingsSnapshotId, seed, sourceId, sourceName, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?);
         """
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -39,12 +39,17 @@ final class SequenceRepository {
         } else {
             sqlite3_bind_null(statement, 3)
         }
-        if let sourceName = sequence.sourceName {
-            sqlite3_bind_text(statement, 4, sourceName, -1, SQLITE_TRANSIENT)
+        if let sourceId = sequence.sourceId {
+            sqlite3_bind_text(statement, 4, sourceId, -1, SQLITE_TRANSIENT)
         } else {
             sqlite3_bind_null(statement, 4)
         }
-        sqlite3_bind_double(statement, 5, Date().timeIntervalSince1970)
+        if let sourceName = sequence.sourceName {
+            sqlite3_bind_text(statement, 5, sourceName, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(statement, 5)
+        }
+        sqlite3_bind_double(statement, 6, Date().timeIntervalSince1970)
 
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw DatabaseError.statementFailed(message: "Failed to insert melody_sequence")

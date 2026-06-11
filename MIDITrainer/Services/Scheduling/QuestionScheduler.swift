@@ -2,11 +2,23 @@ import Foundation
 
 /// The result of asking the scheduler what the next question should be.
 enum NextQuestion: Equatable {
-    /// Generate a fresh new question.
-    case fresh
-    
+    /// Generate a fresh new question. A non-nil seed pins the melody (used by
+    /// adaptive mode to serve a difficulty-targeted candidate).
+    case fresh(seed: UInt64?)
+
     /// Re-ask a previously missed sequence using the given seed and settings.
     case reask(seed: UInt64, settings: PracticeSettingsSnapshot, mistakeId: Int64)
+
+    /// Drill a 2-note fragment extracted from a failed melody.
+    case fragment(FragmentDrill)
+}
+
+/// A resolved 2-note drill ready to play: actual pitches in the current key
+/// plus a display label like "↑P4 drill from Dark Horse".
+struct FragmentDrill: Equatable {
+    let fragmentId: Int64
+    let midiNotes: [UInt8]
+    let label: String
 }
 
 /// Protocol for question scheduling strategies.
@@ -32,15 +44,23 @@ protocol QuestionScheduler: AnyObject {
     
     /// Snapshot of the current queue (if any) for debugging/inspection.
     var queueSnapshot: [QueuedMistake] { get }
-    
+
     /// Clears all pending mistakes from the queue.
     func clearQueue()
+
+    /// Re-reads persisted queue state. Called when this scheduler becomes
+    /// active, since other schedulers may have mutated the shared tables.
+    func reload()
+}
+
+extension QuestionScheduler {
+    func reload() {}
 }
 
 /// A scheduler that only generates fresh questions (no reinforcement).
 final class RandomScheduler: QuestionScheduler {
     func nextQuestion(currentSettings: PracticeSettingsSnapshot) -> NextQuestion {
-        .fresh
+        .fresh(seed: nil)
     }
     
     func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {

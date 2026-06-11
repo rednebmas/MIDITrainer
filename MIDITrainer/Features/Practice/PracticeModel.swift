@@ -51,6 +51,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var activeMistakeTotalFailures: Int?
     @Published private(set) var activeMistakeCurrentGap: Int?
     @Published private(set) var isShowingAnswer: Bool = false
+    @Published private(set) var adaptiveDebugSnapshot: AdaptiveDebugSnapshot?
 
     var isReplaying: Bool { currentAttemptNumber > 1 }
 
@@ -104,16 +105,22 @@ final class PracticeModel: ObservableObject {
         let sequenceRepo = SequenceRepository(db: database)
         let attemptRepo = AttemptRepository(db: database)
         let mistakeQueueRepo = MistakeQueueRepository(db: database)
+        let fragmentQueueRepo = FragmentQueueRepository(db: database)
         self.statsRepository = StatsRepository(db: database)
-        
+
         // Create the scheduling coordinator with persisted mode
         self.schedulingCoordinator = SchedulingCoordinator(
             initialMode: settingsStore.schedulerMode,
             repository: mistakeQueueRepo,
+            fragmentRepository: fragmentQueueRepo,
             statsRepository: self.statsRepository,
+            sequenceGenerator: sequenceGenerator,
             weaknessMatchExactSettings: { settingsStore.weaknessMatchExactSettings },
             spacedMistakeClearance: { settingsStore.spacedMistakeClearance },
             spacedMistakeMinPasses: { settingsStore.spacedMistakeMinPasses },
+            adaptiveTargetAccuracy: { settingsStore.adaptiveTargetAccuracy },
+            adaptiveImmediateDrills: { settingsStore.adaptiveImmediateDrills },
+            octaveMatters: { settingsStore.octaveMatters },
             onModeChange: { newMode in
                 settingsStore.schedulerMode = newMode
             }
@@ -142,6 +149,14 @@ final class PracticeModel: ObservableObject {
             currentSettingsProvider: { settingsStore.settings },
             schedulingCoordinator: schedulingCoordinator
         )
+        settingsStore.$schedulerMode
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newMode in
+                self?.schedulingCoordinator.setMode(newMode)
+            }
+            .store(in: &cancellables)
+
         settingsStore.$settings
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newSettings in
@@ -213,6 +228,7 @@ final class PracticeModel: ObservableObject {
         bindProperty(schedulingCoordinator.$pendingCount, to: \.pendingMistakeCount)
         bindProperty(schedulingCoordinator.$questionsUntilNextReask, to: \.questionsUntilNextReask)
         bindProperty(schedulingCoordinator.$mode, to: \.schedulerMode)
+        bindProperty(schedulingCoordinator.$adaptiveSnapshot, to: \.adaptiveDebugSnapshot)
 
         Publishers.CombineLatest(
             schedulingCoordinator.$queueSnapshot,

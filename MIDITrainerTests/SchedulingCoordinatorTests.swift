@@ -4,6 +4,7 @@ import XCTest
 final class SchedulingCoordinatorTests: XCTestCase {
     private var db: Database!
     private var mistakeRepo: MistakeQueueRepository!
+    private var fragmentRepo: FragmentQueueRepository!
     private var statsRepo: StatsRepository!
     private let settings = PracticeSettingsSnapshot()
 
@@ -12,13 +13,19 @@ final class SchedulingCoordinatorTests: XCTestCase {
         let path = NSTemporaryDirectory() + "test_\(UUID().uuidString).sqlite"
         db = try! Database(path: path)
         mistakeRepo = MistakeQueueRepository(db: db)
+        fragmentRepo = FragmentQueueRepository(db: db)
         statsRepo = StatsRepository(db: db)
     }
 
-    private func makeCoordinator(clearance: Int = 3, minPasses: Int = 3) -> SchedulingCoordinator {
+    private func makeCoordinator(
+        clearance: Int = 3,
+        minPasses: Int = 3,
+        initialMode: SchedulerMode = .spacedMistakes
+    ) -> SchedulingCoordinator {
         SchedulingCoordinator(
-            initialMode: .spacedMistakes,
+            initialMode: initialMode,
             repository: mistakeRepo,
+            fragmentRepository: fragmentRepo,
             statsRepository: statsRepo,
             spacedMistakeClearance: { clearance },
             spacedMistakeMinPasses: { minPasses },

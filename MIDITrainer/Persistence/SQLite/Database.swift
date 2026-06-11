@@ -155,6 +155,25 @@ extension Database {
             ]),
             Migration(version: 7, statements: [
                 "ALTER TABLE mistake_queue ADD COLUMN totalFailures INTEGER;"
+            ]),
+            Migration(version: 8, statements: [
+                """
+                CREATE TABLE IF NOT EXISTS fragment_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    parentMistakeId INTEGER,
+                    fromDegree INTEGER NOT NULL,
+                    fromOctave INTEGER NOT NULL,
+                    toDegree INTEGER NOT NULL,
+                    toOctave INTEGER NOT NULL,
+                    intervalSemitones INTEGER NOT NULL,
+                    sourceName TEXT,
+                    consecutiveCorrect INTEGER NOT NULL DEFAULT 0,
+                    questionsSinceAsked INTEGER NOT NULL DEFAULT 0,
+                    totalFailures INTEGER NOT NULL DEFAULT 1,
+                    queuedAt REAL NOT NULL
+                );
+                """,
+                "CREATE INDEX IF NOT EXISTS idx_fragment_queue_parent ON fragment_queue(parentMistakeId);"
             ])
         ]
     }()

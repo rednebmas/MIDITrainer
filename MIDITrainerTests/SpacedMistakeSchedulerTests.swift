@@ -19,7 +19,7 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
         let scheduler = SpacedMistakeScheduler(repository: repo, clearanceProvider: { 3 })
 
         let q1 = scheduler.nextQuestion(currentSettings: settings)
-        XCTAssertEqual(q1, .fresh)
+        XCTAssertEqual(q1, .fresh(seed: nil))
 
         scheduler.recordCompletion(seed: 100, settings: settings, hadErrors: true, mistakeId: nil, sourceName: nil)
 
@@ -41,13 +41,13 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
 
         for seed in UInt64(200)...201 {
             let q = scheduler.nextQuestion(currentSettings: settings)
-            XCTAssertEqual(q, .fresh)
+            XCTAssertEqual(q, .fresh(seed: nil))
             scheduler.recordCompletion(seed: seed, settings: settings, hadErrors: false, mistakeId: nil, sourceName: nil)
         }
         XCTAssertEqual(scheduler.queueSnapshot[0].questionsSinceQueued, 2)
 
         let q = scheduler.nextQuestion(currentSettings: settings)
-        XCTAssertEqual(q, .fresh)
+        XCTAssertEqual(q, .fresh(seed: nil))
         scheduler.recordCompletion(seed: 202, settings: settings, hadErrors: false, mistakeId: nil, sourceName: nil)
 
         let next = scheduler.nextQuestion(currentSettings: settings)
@@ -566,7 +566,7 @@ final class SpacedMistakeSchedulerTests: XCTestCase {
     private func advanceFreshQuestions(scheduler: SpacedMistakeScheduler, count: Int) {
         for i in 0..<count {
             let q = scheduler.nextQuestion(currentSettings: settings)
-            XCTAssertEqual(q, .fresh, "Question \(i) should be fresh during advance")
+            XCTAssertEqual(q, .fresh(seed: nil), "Question \(i) should be fresh during advance")
             scheduler.recordCompletion(
                 seed: UInt64(10000 + Int.random(in: 0...999999)),
                 settings: settings,

@@ -36,7 +36,7 @@ final class WeaknessFocusedScheduler: QuestionScheduler {
         }
 
         // 3. Fallback to fresh question
-        return .fresh
+        return .fresh(seed: nil)
     }
 
     func recordCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, mistakeId: Int64?, sourceName: String?) {
@@ -92,5 +92,9 @@ final class WeaknessFocusedScheduler: QuestionScheduler {
 
     func clearQueue() {
         spacedScheduler.clearQueue()
+    }
+
+    func reload() {
+        spacedScheduler.reload()
     }
 }
