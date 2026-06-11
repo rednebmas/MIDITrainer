@@ -3,20 +3,18 @@ import Foundation
 /// A scheduler that reinforces incorrect sequences by re-asking them after spaced intervals.
 ///
 /// Behavior:
-/// - When a sequence is answered incorrectly, it's added to the queue with `currentClearanceDistance = clearance`.
+/// - When a sequence is answered incorrectly, it's added to the queue with `currentClearance = clearance`.
 /// - After finishing an incorrect sequence, a fresh question is always asked next.
 /// - After the required number of fresh questions, the mistake is re-asked.
-/// - If answered correctly on re-ask and `current >= min`, it's removed from the queue.
-/// - If answered correctly but `current < min`, current increases by `clearance` for another round.
-/// - If answered incorrectly on re-ask, current steps back by `clearance` (floor at base) and min grows to reflect the new failure count.
+/// - If answered correctly on re-ask and `currentClearance >= requiredClearance`, it's cleared.
+/// - If answered correctly but below the requirement, `currentClearance` grows by `clearance` for another round.
+/// - If answered incorrectly on re-ask, `currentClearance` steps back by `clearance` (floor at base)
+///   and the failure count grows — which inflates the requirement.
 ///
-/// `min` is derived, not persisted state:
-///     min = clearance × max(minPasses, totalFailures)
+/// The requirement is derived, never stored:
+///     requiredClearance = clearance × max(minPasses, totalFailures)
 ///
-/// It is always recomputed from the current `clearance` and `minPasses` settings plus the card's
-/// `totalFailures`. Changing either setting applies immediately to all queued cards — no migration.
-/// The stored `minimumClearanceDistance` column is kept in lockstep with the derived value on every
-/// write (for display consistency) but the scheduler's logic always uses the derivation.
+/// Changing the clearance or minPasses settings applies immediately to all queued cards.
 final class SpacedMistakeScheduler: QuestionScheduler {
     private let repository: MistakeQueueRepository
     private let clearanceProvider: () -> Int
@@ -42,8 +40,8 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         max(1, minPassesProvider())
     }
 
-    private func derivedMin(for mistake: QueuedMistake) -> Int {
-        mistake.requiredClearanceDistance(clearance: clearance, minPasses: minPasses)
+    private func required(for mistake: QueuedMistake) -> Int {
+        mistake.requiredClearance(clearance: clearance, minPasses: minPasses)
     }
 
     private func tryOrLog(_ work: () throws -> Void) {
@@ -52,42 +50,11 @@ final class SpacedMistakeScheduler: QuestionScheduler {
 
     private func loadQueue() {
         do {
-            queue = try repository.loadAll().map { queued in
-                var adjusted = queued
-                var needsUpdate = false
-
-                if adjusted.totalFailures == nil || adjusted.totalFailures! < 1 {
-                    // Legacy rows without a failure count: infer from the stored min
-                    // (min was clearance × failures before failure counts were tracked).
-                    let inferred = max(1, adjusted.minimumClearanceDistance / clearance)
-                    adjusted.totalFailures = inferred
-                    needsUpdate = true
+            queue = try repository.loadAll().map { loaded in
+                let adjusted = loaded.normalized(clearance: clearance, minPasses: minPasses)
+                if adjusted != loaded {
+                    persist(adjusted)
                 }
-
-                let target = derivedMin(for: adjusted)
-                if adjusted.minimumClearanceDistance != target {
-                    adjusted.minimumClearanceDistance = target
-                    needsUpdate = true
-                }
-
-                let clampedCurrent = max(clearance, min(adjusted.currentClearanceDistance, adjusted.minimumClearanceDistance))
-                if adjusted.currentClearanceDistance != clampedCurrent {
-                    adjusted.currentClearanceDistance = clampedCurrent
-                    needsUpdate = true
-                }
-
-                if needsUpdate {
-                    tryOrLog {
-                        try repository.update(
-                            id: adjusted.id,
-                            minimumClearanceDistance: adjusted.minimumClearanceDistance,
-                            currentClearanceDistance: adjusted.currentClearanceDistance,
-                            totalFailures: adjusted.totalFailures,
-                            questionsSinceQueued: adjusted.questionsSinceQueued
-                        )
-                    }
-                }
-
                 return adjusted
             }
         } catch {
@@ -126,7 +93,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         tryOrLog {
             try repository.incrementAllCounters(excluding: excludedId)
             for i in queue.indices where queue[i].id != excludedId {
-                queue[i].questionsSinceQueued += 1
+                queue[i].questionsWaited += 1
             }
         }
     }
@@ -134,15 +101,7 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     private func handleFreshCompletion(seed: UInt64, settings: PracticeSettingsSnapshot, hadErrors: Bool, sourceName: String?) {
         guard hadErrors else { return }
         tryOrLog {
-            var mistake = try repository.insert(seed: seed, settings: settings, sourceName: sourceName, clearance: clearance)
-            mistake.minimumClearanceDistance = derivedMin(for: mistake)
-            try repository.update(
-                id: mistake.id,
-                minimumClearanceDistance: mistake.minimumClearanceDistance,
-                currentClearanceDistance: mistake.currentClearanceDistance,
-                totalFailures: mistake.totalFailures,
-                questionsSinceQueued: mistake.questionsSinceQueued
-            )
+            let mistake = try repository.insert(seed: seed, settings: settings, sourceName: sourceName, clearance: clearance)
             queue.append(mistake)
         }
     }
@@ -151,26 +110,24 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         guard let index = queue.firstIndex(where: { $0.id == mistakeId }) else { return }
 
         if hadErrors {
-            // Failed the re-ask: bump failure count, step current back by one clearance
-            // unit (floor at base clearance), and re-derive min.
+            // Failed the re-ask: bump failure count and step current back by one
+            // clearance unit (floor at base clearance).
             var mistake = queue[index]
             mistake.totalFailures = (mistake.totalFailures ?? 1) + 1
-            mistake.currentClearanceDistance = max(clearance, mistake.currentClearanceDistance - clearance)
-            mistake.minimumClearanceDistance = derivedMin(for: mistake)
-            mistake.questionsSinceQueued = 0
+            mistake.currentClearance = max(clearance, mistake.currentClearance - clearance)
+            mistake.questionsWaited = 0
             queue[index] = mistake
 
             persist(mistake)
         } else {
-            // Passed the re-ask: clear if current has reached derived min, otherwise bump current.
+            // Passed the re-ask: clear if current has reached the requirement, otherwise bump current.
             var mistake = queue[index]
-            mistake.questionsSinceQueued = 0
-            if mistake.currentClearanceDistance >= derivedMin(for: mistake) {
+            mistake.questionsWaited = 0
+            if mistake.currentClearance >= required(for: mistake) {
                 queue.remove(at: index)
                 tryOrLog { try repository.markCleared(id: mistakeId) }
             } else {
-                mistake.currentClearanceDistance += clearance
-                mistake.minimumClearanceDistance = derivedMin(for: mistake)
+                mistake.currentClearance += clearance
                 queue[index] = mistake
                 persist(mistake)
             }
@@ -181,10 +138,9 @@ final class SpacedMistakeScheduler: QuestionScheduler {
         tryOrLog {
             try repository.update(
                 id: mistake.id,
-                minimumClearanceDistance: mistake.minimumClearanceDistance,
-                currentClearanceDistance: mistake.currentClearanceDistance,
+                currentClearance: mistake.currentClearance,
                 totalFailures: mistake.totalFailures,
-                questionsSinceQueued: mistake.questionsSinceQueued
+                questionsWaited: mistake.questionsWaited
             )
         }
     }
@@ -196,24 +152,20 @@ final class SpacedMistakeScheduler: QuestionScheduler {
     var questionsUntilNextReask: Int? {
         // Find the minimum remaining questions until any mistake is due
         let remaining = queue.compactMap { mistake -> Int? in
-            let remaining = mistake.currentClearanceDistance - mistake.questionsSinceQueued
+            let remaining = mistake.currentClearance - mistake.questionsWaited
             return remaining > 0 ? remaining : nil
         }
         return remaining.min()
     }
 
     var queueSnapshot: [QueuedMistake] {
-        queue.map { mistake in
-            var copy = mistake
-            copy.minimumClearanceDistance = derivedMin(for: mistake)
-            return copy
-        }
+        queue
     }
 
-    /// Resets questionsSinceQueued for a due mistake so it must wait its full clearance gap again.
+    /// Resets questionsWaited for a due mistake so it must wait its full clearance gap again.
     func deferMistake(id: Int64) {
         guard let index = queue.firstIndex(where: { $0.id == id }) else { return }
-        queue[index].questionsSinceQueued = 0
+        queue[index].questionsWaited = 0
         persist(queue[index])
     }
 

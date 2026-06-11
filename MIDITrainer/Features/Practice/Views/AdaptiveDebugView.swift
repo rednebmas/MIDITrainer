@@ -77,7 +77,7 @@ private struct AdaptiveMelodyRow: View {
     }
 
     private var ladderProgress: String {
-        let rung = max(1, entry.mistake.currentClearanceDistance / max(1, clearance))
+        let rung = max(1, entry.mistake.currentClearance / max(1, clearance))
         let required = max(minPasses, entry.mistake.totalFailures ?? 1)
         return "pass \(rung)/\(required)"
     }

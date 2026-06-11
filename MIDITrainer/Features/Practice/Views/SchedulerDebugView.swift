@@ -219,8 +219,8 @@ private struct SpacedMistakeRow: View {
     }
 
     private var progress: Double {
-        guard mistake.currentClearanceDistance > 0 else { return 0 }
-        return Double(mistake.questionsSinceQueued) / Double(mistake.currentClearanceDistance)
+        guard mistake.currentClearance > 0 else { return 0 }
+        return Double(mistake.questionsWaited) / Double(mistake.currentClearance)
     }
 
     private var statusColor: Color {
@@ -230,8 +230,8 @@ private struct SpacedMistakeRow: View {
     }
 
     private var progressDescription: String {
-        let remaining = max(0, mistake.currentClearanceDistance - mistake.questionsSinceQueued)
-        let gap = mistake.currentClearanceDistance
+        let remaining = max(0, mistake.currentClearance - mistake.questionsWaited)
+        let gap = mistake.currentClearance
         let failText = failureSummary
         if remaining > 0 {
             return "\(failText) • \(remaining) to go • \(gap) gap"

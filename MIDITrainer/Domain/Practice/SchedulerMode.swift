@@ -3,7 +3,8 @@ import Foundation
 /// The scheduling mode for how questions are presented during practice.
 enum SchedulerMode: String, Codable, CaseIterable, Equatable {
     /// Reinforces incorrect sequences by re-asking them after spaced intervals.
-    /// Clearance distance starts at 3, then increases by 3 on each failure (3 → 6 → 9 → ...).
+    /// The gap grows by one clearance unit per successful re-ask; a mistake
+    /// clears after passing at clearance × max(minPasses, failures).
     case spacedMistakes = "spaced_mistakes"
 
     /// Prioritizes historically weak sequences while maintaining short-term reinforcement.

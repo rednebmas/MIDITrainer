@@ -177,6 +177,15 @@ extension Database {
             ]),
             Migration(version: 9, statements: [
                 "ALTER TABLE mistake_queue ADD COLUMN clearedAt REAL;"
+            ]),
+            Migration(version: 10, statements: [
+                // Backfill failure counts inferred from the legacy derived-minimum
+                // column (min was clearance × failures; clearance has always
+                // defaulted to 3). The minimum is derived at runtime now.
+                "UPDATE mistake_queue SET totalFailures = MAX(1, clearanceDistance / 3) WHERE totalFailures IS NULL;",
+                "ALTER TABLE mistake_queue DROP COLUMN clearanceDistance;",
+                "ALTER TABLE mistake_queue RENAME COLUMN currentClearanceDistance TO currentClearance;",
+                "ALTER TABLE mistake_queue RENAME COLUMN questionsSinceQueued TO questionsWaited;"
             ])
         ]
     }()

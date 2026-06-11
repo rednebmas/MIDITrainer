@@ -8,7 +8,7 @@ struct SchedulerDebugEntry: Identifiable, Equatable {
     let isActive: Bool
 
     var id: Int64 { mistake.id }
-    var remainingUntilDue: Int { max(mistake.currentClearanceDistance - mistake.questionsSinceQueued, 0) }
+    var remainingUntilDue: Int { max(mistake.currentClearance - mistake.questionsWaited, 0) }
 }
 
 enum SequenceFeedback {
@@ -253,7 +253,7 @@ final class PracticeModel: ObservableObject {
             self?.schedulerDebugEntries = entries
             let activeMistake = queue.first { $0.id == activeId }
             self?.activeMistakeTotalFailures = activeMistake?.totalFailures
-            self?.activeMistakeCurrentGap = activeMistake?.currentClearanceDistance
+            self?.activeMistakeCurrentGap = activeMistake?.currentClearance
         }
         .store(in: &cancellables)
     }

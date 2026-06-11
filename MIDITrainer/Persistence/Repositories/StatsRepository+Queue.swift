@@ -14,7 +14,7 @@ extension StatsRepository {
         try db.readWrite { handle in
             let sql = """
             SELECT SUM(CASE WHEN clearedAt IS NULL THEN 1 ELSE 0 END),
-                   AVG(CASE WHEN clearedAt IS NULL THEN currentClearanceDistance END),
+                   AVG(CASE WHEN clearedAt IS NULL THEN currentClearance END),
                    SUM(CASE WHEN clearedAt IS NOT NULL THEN 1 ELSE 0 END)
             FROM mistake_queue;
             """

@@ -58,19 +58,13 @@ final class AdaptiveScheduler: QuestionScheduler {
     }
 
     private func loadMelodyQueue() -> [QueuedMistake] {
-        ((try? mistakeRepository.loadAll()) ?? []).map { mistake in
-            var adjusted = mistake
-            adjusted.minimumClearanceDistance = requiredDistance(for: adjusted)
-            adjusted.currentClearanceDistance = min(
-                max(clearance, adjusted.currentClearanceDistance),
-                adjusted.minimumClearanceDistance
-            )
-            return adjusted
+        ((try? mistakeRepository.loadAll()) ?? []).map {
+            $0.normalized(clearance: clearance, minPasses: minPasses)
         }
     }
 
-    private func requiredDistance(for mistake: QueuedMistake) -> Int {
-        mistake.requiredClearanceDistance(clearance: clearance, minPasses: minPasses)
+    private func required(for mistake: QueuedMistake) -> Int {
+        mistake.requiredClearance(clearance: clearance, minPasses: minPasses)
     }
 
     private var clearance: Int { max(1, clearanceProvider()) }
@@ -131,7 +125,7 @@ final class AdaptiveScheduler: QuestionScheduler {
     var questionsUntilNextReask: Int? {
         let remaining = melodyQueue
             .filter { fragmentQueue.fragmentCount(forParent: $0.id) == 0 }
-            .map { $0.currentClearanceDistance - $0.questionsSinceQueued }
+            .map { $0.currentClearance - $0.questionsWaited }
             .filter { $0 > 0 }
         return remaining.min()
     }
@@ -178,8 +172,7 @@ final class AdaptiveScheduler: QuestionScheduler {
     }
 
     private func isRescueDue(_ mistake: QueuedMistake) -> Bool {
-        mistake.questionsSinceQueued >= mistake.currentClearanceDistance
-            && fragmentQueue.fragmentCount(forParent: mistake.id) == 0
+        mistake.isDue && fragmentQueue.fragmentCount(forParent: mistake.id) == 0
     }
 
     private func freshQuestion(settings: PracticeSettingsSnapshot) -> NextQuestion {
@@ -244,21 +237,19 @@ final class AdaptiveScheduler: QuestionScheduler {
     /// base) and additionally re-gates the melody behind fragment drills.
     private func handleRescueCompletion(mistakeId: Int64, report: CompletionReport) {
         guard let index = melodyQueue.firstIndex(where: { $0.id == mistakeId }) else { return }
-        melodyQueue[index].questionsSinceQueued = 0
+        melodyQueue[index].questionsWaited = 0
         if report.hadErrors {
             melodyQueue[index].totalFailures = (melodyQueue[index].totalFailures ?? 1) + 1
-            melodyQueue[index].currentClearanceDistance = max(
-                clearance, melodyQueue[index].currentClearanceDistance - clearance
+            melodyQueue[index].currentClearance = max(
+                clearance, melodyQueue[index].currentClearance - clearance
             )
-            melodyQueue[index].minimumClearanceDistance = requiredDistance(for: melodyQueue[index])
             persist(melodyQueue[index])
             queueFragments(from: report, parentMistakeId: mistakeId)
-        } else if melodyQueue[index].currentClearanceDistance >= requiredDistance(for: melodyQueue[index]) {
+        } else if melodyQueue[index].currentClearance >= required(for: melodyQueue[index]) {
             try? mistakeRepository.markCleared(id: mistakeId)
             melodyQueue.remove(at: index)
         } else {
-            melodyQueue[index].currentClearanceDistance += clearance
-            melodyQueue[index].minimumClearanceDistance = requiredDistance(for: melodyQueue[index])
+            melodyQueue[index].currentClearance += clearance
             persist(melodyQueue[index])
         }
     }
@@ -278,24 +269,23 @@ final class AdaptiveScheduler: QuestionScheduler {
 
     private func armRescue(parentId: Int64) {
         guard let index = melodyQueue.firstIndex(where: { $0.id == parentId }) else { return }
-        melodyQueue[index].questionsSinceQueued = 0
+        melodyQueue[index].questionsWaited = 0
         persist(melodyQueue[index])
     }
 
     private func incrementMelodyCounters(excluding excludedId: Int64?) {
         try? mistakeRepository.incrementAllCounters(excluding: excludedId)
         for index in melodyQueue.indices where melodyQueue[index].id != excludedId {
-            melodyQueue[index].questionsSinceQueued += 1
+            melodyQueue[index].questionsWaited += 1
         }
     }
 
     private func persist(_ mistake: QueuedMistake) {
         try? mistakeRepository.update(
             id: mistake.id,
-            minimumClearanceDistance: mistake.minimumClearanceDistance,
-            currentClearanceDistance: mistake.currentClearanceDistance,
+            currentClearance: mistake.currentClearance,
             totalFailures: mistake.totalFailures,
-            questionsSinceQueued: mistake.questionsSinceQueued
+            questionsWaited: mistake.questionsWaited
         )
     }
 }
