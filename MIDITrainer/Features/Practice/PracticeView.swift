@@ -10,6 +10,7 @@ struct PracticeView: View {
     @State private var showingMissingOutput = false
     @State private var showingDebug = false
     @State private var showingAccuracyHistory = false
+    @State private var bluetoothPickerBaselineEndpoints: Set<MIDIUniqueID> = []
 
     init(midiService: MIDIService, settingsStore: SettingsStore) {
         _model = StateObject(wrappedValue: PracticeModel(midiService: midiService, settingsStore: settingsStore))
@@ -43,6 +44,7 @@ struct PracticeView: View {
                 onBluetoothTap: {
                     showingMIDISettings = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        bluetoothPickerBaselineEndpoints = onlineEndpointIDs()
                         showingBluetoothPicker = true
                     }
                 }
@@ -55,6 +57,8 @@ struct PracticeView: View {
         }) {
             BluetoothMIDIPicker()
         }
+        .onChange(of: model.availableOutputs) { _, _ in dismissBluetoothPickerIfNewEndpoint() }
+        .onChange(of: model.availableInputs) { _, _ in dismissBluetoothPickerIfNewEndpoint() }
         .alert("MIDI output not available", isPresented: $showingMissingOutput) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -132,6 +136,20 @@ struct PracticeView: View {
             .padding(.bottom, 8)
             #endif
         }
+    }
+
+    private func onlineEndpointIDs() -> Set<MIDIUniqueID> {
+        let outputIDs = model.availableOutputs.filter { !$0.isOffline }.map(\.id)
+        let inputIDs = model.availableInputs.filter { !$0.isOffline }.map(\.id)
+        return Set(outputIDs).union(inputIDs)
+    }
+
+    private func dismissBluetoothPickerIfNewEndpoint() {
+        guard showingBluetoothPicker else { return }
+        let newlyOnline = onlineEndpointIDs().subtracting(bluetoothPickerBaselineEndpoints)
+        guard !newlyOnline.isEmpty else { return }
+        print("[MIDI] BluetoothPicker auto-dismissing — new endpoint(s): \(newlyOnline)")
+        showingBluetoothPicker = false
     }
 
     private func handleAction() {
