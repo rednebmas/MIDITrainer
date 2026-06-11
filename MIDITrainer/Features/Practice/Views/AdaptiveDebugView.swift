@@ -1,34 +1,61 @@
 import SwiftUI
 
 struct AdaptiveDebugSection: View {
-    let snapshot: AdaptiveDebugSnapshot
+    @ObservedObject var model: PracticeModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Difficulty dial: \(percent(snapshot.dialValue)) • target \(percent(snapshot.targetAccuracy))")
-                    .font(.caption.weight(.medium))
-                if let rolling = snapshot.rollingAccuracy {
-                    Text("Rolling first-guess accuracy: \(percent(rolling))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Rolling accuracy: warming up")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+        if let snapshot = model.adaptiveDebugSnapshot {
+            VStack(alignment: .leading, spacing: 12) {
+                dialReadout(snapshot)
+                fragmentList(snapshot)
+                melodyList(snapshot)
             }
+        }
+    }
 
-            if snapshot.fragments.isEmpty {
-                Text("No fragment drills queued")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Fragment Drills (\(snapshot.fragments.count))")
+    private func dialReadout(_ snapshot: AdaptiveDebugSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Difficulty dial: \(percent(snapshot.dialValue)) • target \(percent(snapshot.targetAccuracy))")
+                .font(.caption.weight(.medium))
+            Text(snapshot.rollingAccuracy.map { "Rolling first-guess accuracy: \(percent($0))" }
+                ?? "Rolling accuracy: warming up")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func fragmentList(_ snapshot: AdaptiveDebugSnapshot) -> some View {
+        if snapshot.fragments.isEmpty {
+            Text("No fragment drills queued")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Fragment Drills (\(snapshot.fragments.count))")
+                .font(.caption.weight(.medium))
+            ForEach(snapshot.fragments) { fragment in
+                FragmentDebugRow(fragment: fragment, isActive: fragment.id == model.activeDrill?.id)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func melodyList(_ snapshot: AdaptiveDebugSnapshot) -> some View {
+        if !model.schedulerDebugEntries.isEmpty {
+            HStack {
+                Text("Melody Queue (\(model.schedulerDebugEntries.count))")
                     .font(.caption.weight(.medium))
-                ForEach(snapshot.fragments) { fragment in
-                    FragmentDebugRow(fragment: fragment)
-                }
+                Spacer()
+                Button("Clear") { model.clearMistakeQueue() }
+                    .font(.caption2)
+                    .buttonStyle(.bordered)
+            }
+            ForEach(model.schedulerDebugEntries) { entry in
+                AdaptiveMelodyRow(
+                    entry: entry,
+                    openDrills: snapshot.fragments.lazy.filter { $0.parentMistakeId == entry.id }.count,
+                    clearance: model.spacedMistakeClearance
+                )
             }
         }
     }
@@ -38,8 +65,46 @@ struct AdaptiveDebugSection: View {
     }
 }
 
+private struct AdaptiveMelodyRow: View {
+    let entry: SchedulerDebugEntry
+    let openDrills: Int
+    let clearance: Int
+
+    private var displayName: String {
+        entry.mistake.sourceName ?? String(format: "#%04d", entry.mistake.seed % 10000)
+    }
+
+    private var status: (text: String, color: Color) {
+        if entry.isActive { return ("Rescue now", .green) }
+        if openDrills > 0 { return ("Gated • \(openDrills) drill\(openDrills == 1 ? "" : "s") open", .purple) }
+        let remaining = clearance - entry.mistake.questionsSinceQueued
+        if remaining > 0 { return ("Waiting • \(remaining) to go", .blue) }
+        return ("Rescue ready", .orange)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(displayName)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(status.color.opacity(0.9))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            Text("\(status.text) • failed \(entry.mistake.totalFailures ?? 1)x")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+    }
+}
+
 private struct FragmentDebugRow: View {
     let fragment: QueuedFragment
+    let isActive: Bool
 
     private var name: String {
         let interval = IntervalName.label(semitones: fragment.intervalSemitones)
@@ -48,11 +113,17 @@ private struct FragmentDebugRow: View {
     }
 
     private var status: String {
+        if isActive { return "drilling now" }
         let streak = "streak \(fragment.consecutiveCorrect)/\(AdaptiveTuning.clearStreak)"
         let due = fragment.isDue
             ? "ready"
             : "due in \(AdaptiveTuning.fragmentSpacing - fragment.questionsSinceAsked)"
         return "\(streak) • \(due) • failed \(fragment.totalFailures)x"
+    }
+
+    private var chipColor: Color {
+        if isActive { return .green }
+        return fragment.isDue ? .orange : .purple
     }
 
     var body: some View {
@@ -63,7 +134,7 @@ private struct FragmentDebugRow: View {
                 .lineLimit(1)
                 .padding(.horizontal, 6)
                 .frame(height: 18)
-                .background((fragment.isDue ? Color.orange : Color.purple).opacity(0.9))
+                .background(chipColor.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
             Text(status)

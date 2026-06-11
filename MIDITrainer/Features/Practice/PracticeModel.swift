@@ -52,6 +52,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var activeMistakeCurrentGap: Int?
     @Published private(set) var isShowingAnswer: Bool = false
     @Published private(set) var adaptiveDebugSnapshot: AdaptiveDebugSnapshot?
+    @Published private(set) var activeDrill: QueuedFragment?
 
     var isReplaying: Bool { currentAttemptNumber > 1 }
 
@@ -229,6 +230,16 @@ final class PracticeModel: ObservableObject {
         bindProperty(schedulingCoordinator.$questionsUntilNextReask, to: \.questionsUntilNextReask)
         bindProperty(schedulingCoordinator.$mode, to: \.schedulerMode)
         bindProperty(schedulingCoordinator.$adaptiveSnapshot, to: \.adaptiveDebugSnapshot)
+
+        Publishers.CombineLatest(
+            schedulingCoordinator.$adaptiveSnapshot,
+            schedulingCoordinator.$activeFragmentId
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] snapshot, fragmentId in
+            self?.activeDrill = snapshot?.fragments.first { $0.id == fragmentId }
+        }
+        .store(in: &cancellables)
 
         Publishers.CombineLatest(
             schedulingCoordinator.$queueSnapshot,

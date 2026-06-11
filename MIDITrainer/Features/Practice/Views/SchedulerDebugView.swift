@@ -106,11 +106,7 @@ struct SchedulerDebugView: View {
                 }
 
             case .adaptive:
-                if let snapshot = model.adaptiveDebugSnapshot {
-                    AdaptiveDebugSection(snapshot: snapshot)
-                    Divider()
-                }
-                SpacedMistakesDebugSection(model: model, compact: false)
+                AdaptiveDebugSection(model: model)
             }
         }
         .padding(12)

@@ -8,6 +8,7 @@ final class SchedulingCoordinator: ObservableObject {
     @Published private(set) var questionsUntilNextReask: Int?
     @Published private(set) var queueSnapshot: [QueuedMistake] = []
     @Published private(set) var activeMistakeId: Int64?
+    @Published private(set) var activeFragmentId: Int64?
     @Published private(set) var adaptiveSnapshot: AdaptiveDebugSnapshot?
 
     private var activeScheduler: QuestionScheduler
@@ -76,6 +77,7 @@ final class SchedulingCoordinator: ObservableObject {
         activeScheduler = scheduler(for: newMode)
         activeScheduler.reload()
         activeMistakeId = nil
+        activeFragmentId = nil
 
         onModeChange(newMode)
         updatePublishedState()
@@ -87,10 +89,13 @@ final class SchedulingCoordinator: ObservableObject {
         switch result {
         case .fresh:
             activeMistakeId = nil
+            activeFragmentId = nil
         case .reask(_, _, let mistakeId):
             activeMistakeId = mistakeId
-        case .fragment:
+            activeFragmentId = nil
+        case .fragment(let drill):
             activeMistakeId = nil
+            activeFragmentId = drill.fragmentId
         }
         updatePublishedState()
         return result
@@ -140,6 +145,7 @@ final class SchedulingCoordinator: ObservableObject {
         spacedScheduler.clearQueue()
         adaptiveScheduler.clearQueue()
         activeMistakeId = nil
+        activeFragmentId = nil
         updatePublishedState()
     }
 

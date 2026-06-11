@@ -43,6 +43,10 @@ struct NoteOrbsContainerView: View {
         return notes.compactMap { NoteName(rawValue: Int($0.midiNoteNumber % 12))?.displayName }
     }
 
+    private var retryWord: String {
+        model.schedulerMode == .adaptive ? "Rescue" : "Retry"
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             if let sequence = sequence {
@@ -115,8 +119,12 @@ struct NoteOrbsContainerView: View {
 
                     #if DEBUG
                     HStack(spacing: 4) {
-                        if let gap = model.activeMistakeCurrentGap {
-                            Text("Retry\(model.activeMistakeTotalFailures.map { " #\($0)" } ?? "") (gap \(gap))")
+                        if let drill = model.activeDrill {
+                            Text("Drill (streak \(drill.consecutiveCorrect)/\(AdaptiveTuning.clearStreak))")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.purple)
+                        } else if let gap = model.activeMistakeCurrentGap {
+                            Text("\(retryWord)\(model.activeMistakeTotalFailures.map { " #\($0)" } ?? "") (gap \(gap))")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.yellow)
                         } else if model.isReplaying {
